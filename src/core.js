@@ -123,16 +123,16 @@ namespace.isNotFound = function(value, address) {
   return isObjectNotArray(value) && value.namespaceFunctionConstant === "NotFound";
 };
 
-// Traveller-based traversal
-namespace.traverse = function(traveller) {
-  const { object, address } = traveller;
+// TraversalContext-based traversal
+namespace.traverse = function(ctx) {
+  const { object, address } = ctx;
 
   if (object === undefined || object === null || !isObject(object)) {
     throw new Error("namespace.traverse: object is not a valid namespace root");
   }
 
   if (address === null) {
-    traveller.toReturn = object;
+    ctx.toReturn = object;
     return;
   }
   if (address === undefined || (!isString(address) && isNaN(address))) {
@@ -141,34 +141,34 @@ namespace.traverse = function(traveller) {
 
   const addr = isNaN(address) ? address : address.toString();
 
-  if (traveller.debugging === true) {
+  if (ctx.debugging === true) {
     debugger;
   }
 
-  traveller.addressList = addr.split(".");
-  traveller.returnNow = false;
-  delete traveller.toReturn;
-  traveller.current = traveller.object;
-  traveller.addressListLength = traveller.addressList.length;
-  traveller.index = -1;
+  ctx.addressList = addr.split(".");
+  ctx.returnNow = false;
+  delete ctx.toReturn;
+  ctx.current = ctx.object;
+  ctx.addressListLength = ctx.addressList.length;
+  ctx.index = -1;
 
-  for (traveller.addressComponent of traveller.addressList) {
-    traveller.index++;
+  for (ctx.addressComponent of ctx.addressList) {
+    ctx.index++;
     try {
-      traveller.keyExists = traveller.addressComponent in traveller.current;
-      traveller.next = traveller.current[traveller.addressComponent];
+      ctx.keyExists = ctx.addressComponent in ctx.current;
+      ctx.next = ctx.current[ctx.addressComponent];
     } catch (error) {
-      traveller.keyExists = false;
-      traveller.next = undefined;
+      ctx.keyExists = false;
+      ctx.next = undefined;
     }
-    traveller.finalAddressComponent = traveller.index >= traveller.addressListLength - 1;
+    ctx.finalAddressComponent = ctx.index >= ctx.addressListLength - 1;
     
-    if (isFunction(traveller.func)) {
-      traveller.func(traveller);
+    if (isFunction(ctx.func)) {
+      ctx.func(ctx);
     }
     
-    if (traveller.returnNow === true) return traveller.toReturn;
-    traveller.current = traveller.next;
+    if (ctx.returnNow === true) return ctx.toReturn;
+    ctx.current = ctx.next;
   }
 
   // Loop completed without returning - this is OK for traversal without return value
@@ -177,7 +177,7 @@ namespace.traverse = function(traveller) {
 namespace.getIfExists = function(object, address, options) {
   if (options === undefined || options === null) options = {};
 
-  const traveller = {
+  const ctx = {
     object,
     address,
     debugging: options.debugging,
@@ -193,8 +193,8 @@ namespace.getIfExists = function(object, address, options) {
     }
   };
 
-  namespace.traverse(traveller);
-  return traveller.toReturn;
+  namespace.traverse(ctx);
+  return ctx.toReturn;
 };
 
 namespace.getMustExist = function(object, address, options) {
@@ -219,7 +219,7 @@ namespace.setValue = function(object, address, value, options) {
     throw new Error("namespace.setValue: address cannot be null");
   }
 
-  const traveller = Object.assign(options, {
+  const ctx = Object.assign(options, {
     object,
     address,
     setValue: value,
@@ -264,7 +264,7 @@ namespace.setValue = function(object, address, value, options) {
     }
   });
 
-  return namespace.traverse(traveller);
+  return namespace.traverse(ctx);
 };
 
 namespace.remove = function(object, address) {
@@ -272,12 +272,12 @@ namespace.remove = function(object, address) {
 };
 
 namespace.leafNode = function(object, address, leafValue) {
-  const traveller = { overwrite: false };
+  const ctx = { overwrite: false };
   try {
-    return namespace.setValue(object, address, leafValue, traveller);
+    return namespace.setValue(object, address, leafValue, ctx);
   } catch (error) {
     if (error.message && error.message.includes("cannot overwrite existing value")) {
-      return traveller.next;
+      return ctx.next;
     }
     throw error;
   }

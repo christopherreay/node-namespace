@@ -29,7 +29,7 @@ export interface SetValueOptions extends NamespaceOptions {
   hardWriteHierarchy?: boolean;
 }
 
-export interface Traveller {
+export interface TraversalContext {
   object: any;
   address: string | null;
   addressList?: string[];
@@ -38,10 +38,11 @@ export interface Traveller {
   addressComponent?: string;
   current?: any;
   next?: any;
+  keyExists?: boolean;
   finalAddressComponent?: boolean;
   returnNow?: boolean;
   toReturn?: any;
-  func?: (traveller: Traveller) => void;
+  func?: (ctx: TraversalContext) => void;
   [key: string]: any;
 }
 
@@ -83,7 +84,7 @@ declare namespace namespace {
 
   export function expand(flatObject: Record<string, any>): any;
 
-  export function traverse(traveller: Traveller): any;
+  export function traverse(ctx: TraversalContext): any;
 }
 
 export default namespace;

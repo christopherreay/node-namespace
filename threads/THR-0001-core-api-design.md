@@ -8,8 +8,8 @@
 - Ensure all methods handle edge cases (null inputs, empty paths, non-object roots)
 
 ## Unknowns / Questions
-- Should `setValue` return the set value (for chaining) or the traveller object? (Decision: return set value)
-- ~~Should `getIfExists` support a default value parameter, or keep that in traveller options?~~ (Decision: `options.defaultValueToReturn` — consistent with traveller pattern)
+- Should `setValue` return the set value (for chaining) or the ctx object? (Decision: return set value)
+- ~~Should `getIfExists` support a default value parameter, or keep that in ctx options?~~ (Decision: `options.defaultValueToReturn` — consistent with ctx pattern)
 - Is `exists` redundant with `!isNotFound(getIfExists(...))`? (Decision: keep it for ergonomics)
 - Should `leafNode` be in MVP? (Decision: yes — extremely useful for safe defaults)
 
@@ -32,7 +32,7 @@
 
 ## Next actions
 - [x] Finalize method signatures with TypeScript-style definitions
-- [ ] Document options patterns (traveller pattern for extensibility)
+- [ ] Document options patterns (ctx pattern for extensibility)
 - [ ] Write API documentation with examples
 - [ ] Implement core methods with full test coverage
 

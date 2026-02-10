@@ -183,10 +183,10 @@ atApplication.test.namespace  = atApplication.namespace;
         }
         return atRoot.isObject_notArray(value) && value.namespaceFunctionConstant === "NotFound";
       }
-      atRoot.namespace.traverse = function(traveller)
+      atRoot.namespace.traverse = function(cursor)
       {
-        let object  = traveller.object;
-        let address = traveller.address;
+        let object  = cursor.object;
+        let address = cursor.address;
 
         if (object === undefined || object === null || ! atRoot.isObject(object) )
         { let errorMessage = "@: ERROR: atSrc: namespace: getIfExists: object : this Object is not a valid namespace root object";
@@ -195,7 +195,7 @@ atApplication.test.namespace  = atApplication.namespace;
         }
 
         if (address === null)
-        { traveller.toReturn = object;
+        { cursor.toReturn = object;
           return;
         }
         if (address === undefined || ( !atRoot.isString(address) && isNaN(address) ) )
@@ -207,28 +207,28 @@ atApplication.test.namespace  = atApplication.namespace;
         { address = address.toString();
         }
 
-        if (traveller.debugging === true) debugger;
+        if (cursor.debugging === true) debugger;
 
-        traveller.addressList = address.split(".");
+        cursor.addressList = address.split(".");
 
-        traveller.returnNow   = false;
-        delete traveller.toReturn;
+        cursor.returnNow   = false;
+        delete cursor.toReturn;
 
-        traveller.current = traveller.object;
-        traveller.addressListLength = traveller.addressList.length;
-        traveller.index = -1;
-        for ( traveller.addressComponent of traveller.addressList )
-        { traveller.index ++;
+        cursor.current = cursor.object;
+        cursor.addressListLength = cursor.addressList.length;
+        cursor.index = -1;
+        for ( cursor.addressComponent of cursor.addressList )
+        { cursor.index ++;
           try
-          { traveller.next = traveller.current[traveller.addressComponent];
+          { cursor.next = cursor.current[cursor.addressComponent];
           }
           catch (error)
-          { traveller.next = undefined;
+          { cursor.next = undefined;
           }
-          traveller.finalAddressComponent = traveller.index >= traveller.addressListLength -1;
-          traveller.func(traveller);
-          if (traveller.returnNow === true) return traveller.toReturn;
-          traveller.current = traveller.next;
+          cursor.finalAddressComponent = cursor.index >= cursor.addressListLength -1;
+          cursor.func(cursor);
+          if (cursor.returnNow === true) return cursor.toReturn;
+          cursor.current = cursor.next;
         }
         throw new Error("@: ERROR: atSrc: namespace: traverse: loop terminated without returning - this should never happen");
       }
@@ -243,36 +243,36 @@ atApplication.test.namespace  = atApplication.namespace;
         }
         return toReturn;
       }
-      atRoot.namespace.getIfExists = function(object, address, traveller)
+      atRoot.namespace.getIfExists = function(object, address, cursor)
       {
-        if (traveller === undefined || traveller === null) traveller = {};
+        if (cursor === undefined || cursor === null) cursor = {};
 
-        // traveller.errorFunction = (error) => { "command": "getIfExists", "object": util.inspect(object).slice(200), address};
+        // cursor.errorFunction = (error) => { "command": "getIfExists", "object": util.inspect(object).slice(200), address};
 
-        if (traveller.debugging === true) debugger;
+        if (cursor.debugging === true) debugger;
 
-        traveller.object  =   object;
-        traveller.address =   address;
-        traveller.func    =
-          ( (traveller) =>
+        cursor.object  =   object;
+        cursor.address =   address;
+        cursor.func    =
+          ( (cursor) =>
             {
-              if (traveller.next                   === undefined || traveller.next === atRoot.namespace.NotFound)
-              { traveller.returnNow = true;
-                if (traveller.defaultValueToReturn !== undefined)
-                { traveller.toReturn = traveller.defaultValueToReturn
+              if (cursor.next                   === undefined || cursor.next === atRoot.namespace.NotFound)
+              { cursor.returnNow = true;
+                if (cursor.defaultValueToReturn !== undefined)
+                { cursor.toReturn = cursor.defaultValueToReturn
                 }
                 else
-                { traveller.toReturn  = atRoot.namespace.NotFound;
+                { cursor.toReturn  = atRoot.namespace.NotFound;
                 }
               }
-              else if (traveller.finalAddressComponent  === true      )
-              { traveller.returnNow = true;
-                traveller.toReturn  = traveller.next;
+              else if (cursor.finalAddressComponent  === true      )
+              { cursor.returnNow = true;
+                cursor.toReturn  = cursor.next;
               }
             }
           );
-        atRoot.namespace.traverse(traveller);
-        return traveller.toReturn;
+        atRoot.namespace.traverse(cursor);
+        return cursor.toReturn;
       }
       
       atRoot.namespace.getMustExist = function(object, address, options)
@@ -307,110 +307,110 @@ atApplication.test.namespace  = atApplication.namespace;
 
       atRoot.namespace.leafNode = function(object, address, leafNode)
       { let toReturn;
-        let traveller;
+        let cursor;
 
-        traveller = { "overwrite": false};
+        cursor = { "overwrite": false};
 
         try
-        { toReturn = atRoot.namespace.setValue(object, address, leafNode, traveller);
+        { toReturn = atRoot.namespace.setValue(object, address, leafNode, cursor);
         }
         catch (error)
         { if (error.message.startsWith("@: atSrc: namespace: setValue: cannot overwrite existing value:"))
-          { toReturn = traveller.next;
+          { toReturn = cursor.next;
           }
         }
         return toReturn;
 
         // return atRoot.namespace(object, address, ["leafNode:"], leafNode);
       }
-      atRoot.namespace.setValue = function(object, address, value, traveller)
+      atRoot.namespace.setValue = function(object, address, value, cursor)
       {
-        if (traveller === undefined || traveller === null) traveller = {};
+        if (cursor === undefined || cursor === null) cursor = {};
 
 
-        if (traveller.debugging === true) debugger;
+        if (cursor.debugging === true) debugger;
 
 
         if (address === null) throw new Error("@: atSrc: namespace: setValue: setting the address to null implies setting the containing object, which is impossible: "+address);
 
-        traveller.object            =   object;
-        traveller.address           =   address;
-        traveller.setValue          =   value;
+        cursor.object            =   object;
+        cursor.address           =   address;
+        cursor.setValue          =   value;
 
-        traveller.overwrite         =   traveller.overwrite === true;
-        traveller.dryRun            =   traveller.dryRun    === true;
-        traveller.ignoreErrors      =   traveller.ignoreErrors === true;
+        cursor.overwrite         =   cursor.overwrite === true;
+        cursor.dryRun            =   cursor.dryRun    === true;
+        cursor.ignoreErrors      =   cursor.ignoreErrors === true;
 
-        traveller.func              =
-            (traveller) =>
+        cursor.func              =
+            (cursor) =>
             {
-              if (traveller.debugging === true) debugger;
+              if (cursor.debugging === true) debugger;
 
-              if (! traveller.finalAddressComponent)
-              { if (traveller.next === undefined)
-                { if (traveller.dryRun === true)
-                  { traveller.returnNow = true;
+              if (! cursor.finalAddressComponent)
+              { if (cursor.next === undefined)
+                { if (cursor.dryRun === true)
+                  { cursor.returnNow = true;
                   }
                   else
-                  { traveller.next = traveller.current[traveller.addressComponent] = {};
+                  { cursor.next = cursor.current[cursor.addressComponent] = {};
                   }
                 }
-                else if (! atRoot.isObject(traveller.next) )
-                { if (traveller.ignoreErrors === true)
-                  { traveller.returnNow = true;
-                    traveller.toReturn  = undefined;
+                else if (! atRoot.isObject(cursor.next) )
+                { if (cursor.ignoreErrors === true)
+                  { cursor.returnNow = true;
+                    cursor.toReturn  = undefined;
                   }
-                  else if (traveller.hardWriteHierarchy === true)
-                  { traveller.next = traveller.current[traveller.addressComponent] = {};
+                  else if (cursor.hardWriteHierarchy === true)
+                  { cursor.next = cursor.current[cursor.addressComponent] = {};
                   }
                   else
-                  { throw new Error("@: atSrc: namespace: setValue: there is no valid object hierarchy to "+traveller.address);
+                  { throw new Error("@: atSrc: namespace: setValue: there is no valid object hierarchy to "+cursor.address);
                   }
                 }
               }
               else
-              { if (traveller.overwrite !== true && traveller.ignoreErrors !== true && traveller.next !== undefined)
-                { throw new Error("@: atSrc: namespace: setValue: cannot overwrite existing value: "+traveller.address);
+              { if (cursor.overwrite !== true && cursor.ignoreErrors !== true && cursor.next !== undefined)
+                { throw new Error("@: atSrc: namespace: setValue: cannot overwrite existing value: "+cursor.address);
                 }
-                else if (traveller.dryRun || ( traveller.overwrite === false && traveller.ignoreErrors === true && traveller.next !== undefined)  )
-                { traveller.returnNow               = true;
+                else if (cursor.dryRun || ( cursor.overwrite === false && cursor.ignoreErrors === true && cursor.next !== undefined)  )
+                { cursor.returnNow               = true;
                 }
                 else
                 { 
-                  if (atRoot.isFunction(traveller.setValue))
+                  if (atRoot.isFunction(cursor.setValue))
                   { //TODO: finish this
                   }
 
-                  traveller.current[traveller.addressComponent] = traveller.setValue;
-                  traveller.returnNow               = true;
-                  traveller.toReturn                = traveller.setValue;
+                  cursor.current[cursor.addressComponent] = cursor.setValue;
+                  cursor.returnNow               = true;
+                  cursor.toReturn                = cursor.setValue;
                 }
               }
             }
-        return atRoot.namespace.traverse(traveller);
+        return atRoot.namespace.traverse(cursor);
       }
 
-      atRoot.namespace.extend = function(extendIntoThisObject, extendFromThisObject, traveller)
+      atRoot.namespace.extend = function(extendIntoThisObject, extendFromThisObject, cursor)
       {
         // extend will throw an error without making any changes if there are any issues
         //   not thread safe
-        if (traveller === undefined || traveller === null) traveller = {};
-        if (traveller.debugging === true) debugger;
+        if (cursor === undefined || cursor === null) cursor = {};
+        if (cursor.debugging === true) debugger;
 
         if (atRoot.isObject_notArray(extendFromThisObject))
-        { traveller.overwrite =   traveller.overwrite === true;
-          traveller.ignoreErrors = traveller.ignoreErrors === true;
+        { cursor.overwrite =   cursor.overwrite === true;
+          cursor.ignoreErrors = cursor.ignoreErrors === true;
           // do a dry run, and throw an error if there are any
-          if (traveller.ignoreErrors === false)
+          if (cursor.ignoreErrors === false)
           { for ( const [key, value] of Object.entries(extendFromThisObject) )
-            { traveller.dryRun = true;
-              atRoot.namespace.setValue(extendIntoThisObject, key, value, traveller);
+            { cursor.dryRun = true;
+              atRoot.namespace.setValue(extendIntoThisObject, key, value, cursor);
             }
           }
           // actually perform the xtend, as a batch transaction - not thread safe
           for ( const [key, value] of Object.entries(extendFromThisObject) )
-          { traveller.dryRun = false;
-            atRoot.namespace.setValue(extendIntoThisObject, key, value, traveller );
+          { cursor.dryRun = false;
+            atRoot.namespace.setValue(extendIntoThisObject, key, value, cursor );
           }
         }
       }
@@ -478,30 +478,30 @@ atApplication.test.namespace  = atApplication.namespace;
       atRoot.namespace.buildStateFromDeepCopy = function(persistentDataAndVennData)
       { 
                 
-                  let persistableStateToAssign  = JSON.parse(JSON.stringify(persistentDataAndVennData.travellerState_persistable));
+                  let persistableStateToAssign  = JSON.parse(JSON.stringify(persistentDataAndVennData.cursorState_persistable));
                   let runtimeStateToAssign      = {};
                   if (persistentDataAndVennData.vennData !== undefined)
                   { runtimeStateToAssign = persistentDataAndVennData.vennData.complementOfTwo;
                   }
                   
                   let fullStateToAssign = {};
-                  namespace.extendObjectWithVennComplementOfTwo(fullStateToAssign, undoTravellerToThisState.vennData, {"overwrite":true});
+                  namespace.extendObjectWithVennComplementOfTwo(fullStateToAssign, undoTraversalContextToThisState.vennData, {"overwrite":true});
                   namespace.extend(fullStateToAssign, persistableStateToAssign, {"ignoreErrors":true});
                   
-                  workerTraveller.state.traveller = fullStateToAssign.traveller;
-                  // workerTraveller.sta
+                  workerTraversalContext.state.cursor = fullStateToAssign.cursor;
+                  // workerTraversalContext.sta
       }
-      atRoot.namespace.deepCopyTraveller = function(copyThisTraveller)
+      atRoot.namespace.deepCopyTraversalContext = function(copyThisTraversalContext)
       { 
         debugger;
 
-        let travellerState_original     = { "traveller": namespace.getMustExist(copyThisTraveller, "traveller") };
-        let travellerState_persistable  = { "traveller": JSON.parse(JSON.stringify(copyThisTraveller.traveller)) };
-        let vennData                    = atRoot.namespace.venn(travellerState_original, travellerState_persistable);
+        let cursorState_original     = { "cursor": namespace.getMustExist(copyThisTraversalContext, "cursor") };
+        let cursorState_persistable  = { "cursor": JSON.parse(JSON.stringify(copyThisTraversalContext.cursor)) };
+        let vennData                    = atRoot.namespace.venn(cursorState_original, cursorState_persistable);
 
         debugger;
 
-        return { "travellerState_persistable": travellerState_persistable , "vennData": vennData };
+        return { "cursorState_persistable": cursorState_persistable , "vennData": vennData };
       };
 
       atRoot.namespace.equals = function(object1, object2, fullAddress, toReturn)
@@ -614,7 +614,7 @@ atApplication.test.namespace  = atApplication.namespace;
         
         if (runtimeNamespaceList === undefined || runtimeNamespaceList === null)
         {
-          runtimeNamespaceList = atRoot.namespace.getIfExists(copyThisObject, "traveller.routerAsAService.nestTravellerFlow.runtimeNamespaceList");
+          runtimeNamespaceList = atRoot.namespace.getIfExists(copyThisObject, "cursor.routerAsAService.nestTraversalContextFlow.runtimeNamespaceList");
           if (atRoot.namespace.isNotFound(runtimeNamespaceList)) runtimeNamespaceList = [];
         }
 

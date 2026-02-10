@@ -52,10 +52,10 @@ function handleGetApplication(req, res, context) {
   
   try {
     // Retrieve required configuration with rich error context
-    // If this fails, error will include full path: "traveller.projects.app.config.database"
+    // If this fails, error will include full path: "app.projects.app.config.database"
     const dbConfig = namespace.getMustExist(
       context,
-      'traveller.projects.app.config.database',
+      'app.projects.app.config.database',
       { errorMessage: 'API Error: Database configuration missing' }
     );
     
@@ -152,7 +152,7 @@ function validateApplicationFields(applicationData, fieldDefinitions) {
  * Demonstrates dynamic namespace path building
  */
 function getTenantConfig(context, tenantId) {
-  const tenantNamespace = `traveller.tenants.${tenantId}.config`;
+  const tenantNamespace = `app.tenants.${tenantId}.config`;
   
   // This will throw with full path if tenant doesn't exist
   return namespace.getMustExist(
@@ -168,7 +168,7 @@ if (require.main === module) {
   
   // Setup mock context with nested config
   const context = {
-    traveller: {
+    app: {
       projects: {
         app: {
           config: {

@@ -39,7 +39,7 @@ Hooks receive a context object with:
   address: 'path.to.key',     // The dotted path
   value: 'newValue',          // For setValue (the value being set)
   options: {},                // Options passed to the operation
-  traveller: {}               // The traveller object (for advanced use)
+  ctx: {}               // The ctx object (for advanced use)
 }
 ```
 
@@ -142,5 +142,5 @@ This is inspired by:
 
 1. Should we support async hooks?
 2. Should we allow multiple hooks per operation, and if so, in what order?
-3. Should hooks affect the traveller pattern internals?
+3. Should hooks affect the ctx pattern internals?
 4. Performance benchmarks needed?

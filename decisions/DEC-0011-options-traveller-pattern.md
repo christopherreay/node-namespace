@@ -1,8 +1,8 @@
-# DEC-0011: Options/Traveller Pattern for Extensibility
+# DEC-0011: Options/TraversalContext Pattern for Extensibility
 
-**Context:** Legacy code uses a "traveller" object passed through traversal operations. This provides hooks for debugging, dry runs, and custom behavior. User feedback emphasizes the value of options for API ergonomics.
+**Context:** Legacy code uses a "ctx" object passed through traversal operations. This provides hooks for debugging, dry runs, and custom behavior. User feedback emphasizes the value of options for API ergonomics.
 
-**Decision:** Preserve the options pattern (traveller pattern) for extensibility. Key options:
+**Decision:** Preserve the options pattern (ctx pattern) for extensibility. Key options:
 
 - `getMustExist(object, path, options)` supports:
   - `options.errorMessage` — custom error message (useful for API validation)

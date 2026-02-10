@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `isNotFound()` — NotFound sentinel detection
   - `join()` — Path component joining
   - `flatten()` / `expand()` — Object flattening and expansion
-  - `traverse()` — Low-level traversal with traveller pattern
+  - `traverse()` — Low-level traversal with ctx pattern
 
 - **NotFound Sentinel** — Distinguishes "path not found" from "value is undefined"
   - Frozen singleton object for reliable detection

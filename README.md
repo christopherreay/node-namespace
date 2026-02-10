@@ -122,10 +122,10 @@ function handleApiRequest(req, res, context) {
   
   try {
     // Fail-fast validation with rich error context
-    // Error will include full path if missing: "traveller.config.database.url"
+    // Error will include full path if missing: "app.config.database.url"
     const dbUrl = namespace.getMustExist(
       context,
-      'traveller.config.database.url',
+      'app.config.database.url',
       { errorMessage: 'API Error: Database configuration missing' }
     );
     
@@ -338,6 +338,8 @@ const port = namespace.getIfExists(config, 'server.port', {
 2. **Explicit > Implicit** — NotFound sentinel distinguishes "missing" from "undefined"
 3. **Fail fast** — `getMustExist` throws with meaningful errors
 4. **Zero dependencies** — No security concerns, tiny bundle size
+
+If you want the underlying philosophy laid out plainly: [`docs/PHILOSOPHY.md`](./docs/PHILOSOPHY.md)
 
 ## For LLM/Code Generation
 

@@ -536,7 +536,7 @@ describe('namespace core', () => {
         address: null,
         func: () => {}
       });
-      // traverse returns nothing for null address (sets traveller.toReturn)
+      // traverse returns nothing for null address (sets ctx.toReturn)
     });
   });
 
@@ -729,7 +729,7 @@ describe('AI Agent Patterns', () => {
 describe('API Endpoint Pattern', () => {
   it('should support standardized response envelope', () => {
     const context = {
-      traveller: {
+      ctx: {
         config: {
           database: { url: 'postgres://localhost/app' }
         }
@@ -752,7 +752,7 @@ describe('API Endpoint Pattern', () => {
     };
     
     try {
-      const dbUrl = namespace.getMustExist(context, 'traveller.config.database.url');
+      const dbUrl = namespace.getMustExist(context, 'ctx.config.database.url');
       const userId = namespace.getMustExist(req.body, 'userId');
       
       responseBody.results = { dbUrl, userId };
@@ -778,11 +778,11 @@ describe('API Endpoint Pattern', () => {
     const context = {};
     
     try {
-      namespace.getMustExist(context, 'traveller.config.database.url');
+      namespace.getMustExist(context, 'ctx.config.database.url');
       assert.fail('Should have thrown');
     } catch (error) {
       assert.ok(error.message.includes('Property not found'));
-      assert.ok(error.message.includes('traveller.config.database.url'));
+      assert.ok(error.message.includes('ctx.config.database.url'));
     }
   });
 

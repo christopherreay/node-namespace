@@ -9,7 +9,7 @@
 
 ## Unknowns / Questions
 - Is anyone using the `defaultList` with `eval` feature? (Decision: keep it, it's powerful)
-- Should we preserve `traveller` pattern for extensibility? (Decision: yes, it's elegant)
+- Should we preserve `ctx` pattern for extensibility? (Decision: yes, it's elegant)
 
 ## Axes / dimensions
 | Axis | Legacy State | Target State |
@@ -22,7 +22,7 @@
 
 ## Decisions
 - **DEC-0008:** Remove `toEval_*` helpers — too niche for core library
-- **DEC-0009:** Remove `traveller.routerAsAService` references — application-specific code
+- **DEC-0009:** Remove `ctx.routerAsAService` references — application-specific code
 - **DEC-0010:** Keep `eval` for `defaultList` feature — add CSP warning in docs
 
 ## Evidence / Sources
