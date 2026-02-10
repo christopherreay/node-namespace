@@ -41,5 +41,6 @@
 - ✅ Documentation (README, LICENSE)
 - ✅ API endpoint pattern example (examples/api-endpoint.js)
 - ✅ AI Agent documentation (AGENTS.md, examples/agent-usage.js)
+- ✅ Repository polish (CONTRIBUTING.md, CHANGELOG.md, GITHUB_SETTINGS.md)
 - ✅ Committed and pushed to GitHub
-- 🔄 Next: npm publish prep
+- 🔄 Next: Configure GitHub repo settings, create v1.0.0 release
