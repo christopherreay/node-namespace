@@ -68,7 +68,52 @@ This is a design stance:
 
 So the default is a protective boundary.
 
-## 5) Why this is powerful for LLMs
+## 5) The layers where this stays true (growth → interaction → reality)
+
+The same boundary principle shows up at multiple scales.
+
+### Layer A — Growing *into* a domain (design-time fluidity)
+
+This is the phase where the schema is not yet fully known.
+
+- You want to **sketch structure into existence** without ceremony.
+- You want to **postpone commitment** until the domain has revealed itself.
+
+What helps here:
+- `namespace()` / `setValue()` let you grow structure as you discover it.
+- `leafNode()` lets you establish defaults without clobbering later discoveries.
+- `exists()` avoids mistakes caused by falsy-but-meaningful values.
+
+### Layer B — Domain ↔ domain interaction (translation boundaries)
+
+This is where different models negotiate meaning: APIs, storage schemas, third‑party services, other teams.
+
+At boundaries you get mismatch:
+- different naming conventions
+- optional vs required disagreements
+- version drift
+
+What helps here:
+- Dotted paths become a **translation surface** between shapes.
+- `getMustExist({ errorMessage })` becomes contract enforcement.
+- `flatten()` / `expand()` let you treat deep structure as an addressable keyspace (overlay, project, merge).
+
+### Layer C — Domain ↔ reality (runtime concreteness)
+
+This is where you touch live data: requests, DB rows, sensors, payments.
+
+Reality is messy:
+- fields missing
+- fields present but null
+- partial updates
+- ambiguity around `undefined`
+
+What helps here:
+- `NotFound` preserves the difference between “missing” and “present-but-empty”.
+- `getIfExists({ defaultValueToReturn })` enables graceful degradation.
+- Safety-by-default `setValue` reduces silent corruption in long-lived state.
+
+## 6) Why this is powerful for LLMs
 
 LLMs operate mainly in soft structure (symbols). The runtime is hard structure.
 
@@ -81,6 +126,25 @@ LLMs operate mainly in soft structure (symbols). The runtime is hard structure.
 It doesn’t “solve programming.”
 
 It stabilizes one of the most failure-prone boundaries: **names touching structure**.
+
+## 7) The cybernetic angle (what the tool is really doing)
+
+Cybernetics, at minimum, is about **regulation via feedback**: a system stays coherent by continuously comparing intention to reality and correcting.
+
+`namespace` supports that regulation loop at the naming↔structure seam:
+
+- **You propose** a name/path (soft structure).
+- **You test** whether it corresponds to reality (`exists`, `getIfExists`, `NotFound`).
+- **You enforce** a constraint when the system must be in a particular state (`getMustExist`).
+- **You act** to grow or correct structure (`setValue`, `leafNode`, `remove`).
+
+In other words: it makes it cheap to run the loop:
+
+> model → probe → decide → write → re‑probe
+
+Across layers (design, integration, runtime), the “core thing” is the same:
+
+> preserving distinctions and making corrections at the boundary where symbols meet structure.
 
 ---
 
