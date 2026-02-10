@@ -36,9 +36,10 @@
 - ✅ Decision records (DEC-0001 through DEC-0011)
 - ✅ Core implementation complete (src/core.js)
 - ✅ TypeScript definitions (types/index.d.ts)
-- ✅ Comprehensive test suite (92 tests, all passing)
+- ✅ Comprehensive test suite (97 tests, all passing)
 - ✅ Build system (Rollup → ESM/CJS/UMD)
 - ✅ Documentation (README, LICENSE)
 - ✅ API endpoint pattern example (examples/api-endpoint.js)
+- ✅ AI Agent documentation (AGENTS.md, examples/agent-usage.js)
 - ✅ Committed and pushed to GitHub
 - 🔄 Next: npm publish prep
