@@ -127,7 +127,27 @@ It doesn’t “solve programming.”
 
 It stabilizes one of the most failure-prone boundaries: **names touching structure**.
 
-## 7) The cybernetic angle (what the tool is really doing)
+## 7) Ergonomics (should feel natural while typing)
+
+A philosophy is only real if it survives contact with fingers on a keyboard.
+
+This library is meant to *match the developer’s live design loop*:
+
+- **Name** the thing (a path is the thought)
+- **Probe** the shape (what exists? what’s missing?)
+- **Harden** a decision (required vs optional)
+- **Act** to grow/correct structure safely
+
+So the API should read like a sentence the developer is already forming:
+
+- “Get it if it exists, otherwise I’ll handle it” → `getIfExists(..., { defaultValueToReturn })`
+- “This must exist; fail clearly” → `getMustExist(..., { errorMessage })`
+- “Set this, but don’t stomp earlier meaning unless I say so” → `setValue(..., { overwrite: true })`
+- “Initialize if absent; otherwise leave it alone” → `leafNode(...)`
+
+The dotted path is the point where thought becomes structure. Keeping it explicit (and keeping `NotFound` distinct from `undefined`) prevents intent from collapsing into ambiguity.
+
+## 8) The cybernetic angle (what the tool is really doing)
 
 Cybernetics, at minimum, is about **regulation via feedback**: a system stays coherent by continuously comparing intention to reality and correcting.
 
