@@ -1,1 +1,0 @@
-/home/sirGranite/.openclaw/workspace/USER.md
