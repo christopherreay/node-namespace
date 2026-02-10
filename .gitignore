@@ -6,3 +6,14 @@ dist/
 .vscode/
 .idea/
 coverage/
+
+# OpenClaw context files
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+MEMORY.md
+memory/
+BOOTSTRAP.md
