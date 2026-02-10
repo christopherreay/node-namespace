@@ -1,0 +1,60 @@
+{
+  "name": "@namespace-js/core",
+  "version": "1.0.0",
+  "description": "Zero-dependency dotted-path namespace utilities for JavaScript — auto-vivification, NotFound sentinel, and safe defaults",
+  "main": "dist/namespace.cjs",
+  "module": "dist/namespace.mjs",
+  "browser": "dist/namespace.umd.js",
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./types/index.d.ts",
+        "default": "./dist/namespace.mjs"
+      },
+      "require": {
+        "types": "./types/index.d.ts",
+        "default": "./dist/namespace.cjs"
+      }
+    },
+    "./browser": {
+      "default": "./dist/namespace.umd.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "types/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "test": "node --test test/*.test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "namespace",
+    "dotted-path",
+    "object-path",
+    "auto-vivification",
+    "deep-get",
+    "deep-set",
+    "nested-objects",
+    "configuration",
+    "zero-dependency"
+  ],
+  "author": "Christopher Reay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christopherreay/node-namespace.git"
+  },
+  "bugs": {
+    "url": "https://github.com/christopherreay/node-namespace/issues"
+  },
+  "homepage": "https://github.com/christopherreay/node-namespace#readme",
+  "devDependencies": {
+    "rollup": "^4.0.0"
+  }
+}

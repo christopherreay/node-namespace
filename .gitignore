@@ -1,5 +1,8 @@
-# Project-local ignores
-
-# Daily memory scratch (keep this dir, but don't commit daily notes)
-memory/*.md
-!memory/.gitkeep
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.vscode/
+.idea/
+coverage/
