@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "inject": [
+    "ops/WORKING-CONTEXT.md",
+    "ops/INDEX.md",
+    "ops/CONTEXT-MANIFEST.json",
+    "ops/THREADS-PROTOCOL.md",
+    "docs/GOALS.md",
+    "docs/SCOPE.md",
+    "docs/THREADS.md",
+    "MEMORY.md"
+  ],
+  "optional": [
+    "research/LOG.md"
+  ]
+}
