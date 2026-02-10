@@ -623,6 +623,109 @@ describe('namespace core', () => {
   });
 });
 
+describe('AI Agent Patterns', () => {
+  it('should handle structured LLM output with fallbacks', () => {
+    // Simulating different LLM output formats
+    const nestedFormat = {
+      intent: { type: 'greeting', confidence: 0.95 },
+      entities: { name: 'Alice' }
+    };
+    
+    const flatFormat = {
+      intent_type: 'greeting',
+      entity_name: 'Alice'
+    };
+    
+    function extractIntent(data) {
+      return namespace.getIfExists(data, 'intent.type', {
+        defaultValueToReturn: namespace.getIfExists(data, 'intent_type')
+      });
+    }
+    
+    function extractName(data) {
+      return namespace.getIfExists(data, 'entities.name', {
+        defaultValueToReturn: namespace.getIfExists(data, 'entity_name')
+      });
+    }
+    
+    assert.strictEqual(extractIntent(nestedFormat), 'greeting');
+    assert.strictEqual(extractIntent(flatFormat), 'greeting');
+    assert.strictEqual(extractName(nestedFormat), 'Alice');
+    assert.strictEqual(extractName(flatFormat), 'Alice');
+  });
+
+  it('should support conversation state management', () => {
+    const session = {};
+    
+    // Turn 1: Learn user's name
+    namespace.setValue(session, 'user.name', 'Alice');
+    assert.strictEqual(namespace.exists(session, 'user.name'), true);
+    
+    // Turn 2: Add preference
+    namespace.setValue(session, 'user.preferences.theme', 'dark');
+    assert.strictEqual(namespace.getIfExists(session, 'user.preferences.theme'), 'dark');
+    
+    // Check for unknown info
+    assert.strictEqual(namespace.exists(session, 'user.age'), false);
+    assert.strictEqual(
+      namespace.getIfExists(session, 'user.age', { defaultValueToReturn: 'unknown' }),
+      'unknown'
+    );
+  });
+
+  it('should support incremental knowledge building with leafNode', () => {
+    const knowledge = {};
+    
+    // First mention
+    namespace.leafNode(knowledge, 'facts.name', 'Alice');
+    assert.strictEqual(knowledge.facts.name, 'Alice');
+    
+    // Try to overwrite (should not work)
+    namespace.leafNode(knowledge, 'facts.name', 'Bob');
+    assert.strictEqual(knowledge.facts.name, 'Alice');
+  });
+
+  it('should validate required fields in agent output', () => {
+    const requiredPaths = ['intent.type', 'entities.primary', 'response.text'];
+    
+    function validateAgentOutput(output) {
+      return requiredPaths.filter(path => !namespace.exists(output, path));
+    }
+    
+    const validOutput = {
+      intent: { type: 'query' },
+      entities: { primary: 'user' },
+      response: { text: 'Hello!' }
+    };
+    
+    const invalidOutput = {
+      intent: { type: 'query' },
+      response: { text: 'Hello!' }
+      // missing entities.primary
+    };
+    
+    assert.deepStrictEqual(validateAgentOutput(validOutput), []);
+    assert.deepStrictEqual(validateAgentOutput(invalidOutput), ['entities.primary']);
+  });
+
+  it('should support multi-step tool chains', () => {
+    const context = {};
+    
+    // Tool 1 result
+    namespace.setValue(context, 'tool1.result.userId', 'user-123');
+    
+    // Tool 2 uses Tool 1 result
+    const userId = namespace.getMustExist(context, 'tool1.result.userId');
+    namespace.setValue(context, 'tool2.result.orders', [{ id: 'order-1' }]);
+    
+    // Tool 3 uses Tool 2 result
+    const orderId = namespace.getMustExist(context, 'tool2.result.orders.0.id');
+    namespace.setValue(context, 'tool3.result.refund', { status: 'completed' });
+    
+    assert.strictEqual(namespace.getMustExist(context, 'tool3.result.refund.status'), 'completed');
+  });
+});
+
 describe('API Endpoint Pattern', () => {
   it('should support standardized response envelope', () => {
     const context = {

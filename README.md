@@ -78,6 +78,35 @@ const cache = namespace.leafNode(app, 'cache.users', new Map());
 // cache is app.cache.users — creates Map only if didn't exist
 ```
 
+## For AI Agents & LLMs
+
+Perfect for managing structured output from language models and conversation state:
+
+```javascript
+// Build nested structures from LLM output
+const result = {};
+namespace.setValue(result, 'intent.type', 'greeting');
+namespace.setValue(result, 'entities.userName', 'Alice');
+
+// Safe access to optional fields
+const confidence = namespace.getIfExists(result, 'intent.confidence', {
+  defaultValueToReturn: 0.5
+});
+
+// Check if required fields exist before processing
+if (namespace.exists(result, 'entities.userName')) {
+  console.log(`Hello, ${result.entities.userName}!`);
+}
+```
+
+**Why agents love this library:**
+- **Never crashes** on missing paths (common with LLM outputs)
+- **Clear errors** — if `getMustExist` fails, you know exactly which path was missing
+- **Incremental building** — safely add fields as the conversation progresses
+- **Distinguishes "not set" from "set to undefined"** — crucial for partial updates
+
+See `AGENTS.md` for complete agent usage guide and patterns.
+
 ## API Endpoint Pattern
 
 A common production pattern for REST API endpoints with validation, error handling, and standardized responses:
