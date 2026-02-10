@@ -339,6 +339,14 @@ const port = namespace.getIfExists(config, 'server.port', {
 3. **Fail fast** — `getMustExist` throws with meaningful errors
 4. **Zero dependencies** — No security concerns, tiny bundle size
 
+## For LLM/Code Generation
+
+Using this library as a "lens" for AI code generation? See:
+- [`docs/LLM_LENS.md`](./docs/LLM_LENS.md) — Conceptual framework
+- [`docs/SYSTEM_PROMPT.md`](./docs/SYSTEM_PROMPT.md) — Copy-paste system prompt
+
+These resources teach LLMs to default to namespace patterns for all nested data operations.
+
 ## License
 
 MIT
