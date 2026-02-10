@@ -623,6 +623,139 @@ describe('namespace core', () => {
   });
 });
 
+describe('API Endpoint Pattern', () => {
+  it('should support standardized response envelope', () => {
+    const context = {
+      traveller: {
+        config: {
+          database: { url: 'postgres://localhost/app' }
+        }
+      }
+    };
+    
+    const req = { body: { userId: 'user-123' } };
+    const res = {
+      statusCode: null,
+      jsonBody: null,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.jsonBody = body; return this; }
+    };
+    
+    // Simulate API handler
+    const responseBody = {
+      success: false,
+      statusCode: 400,
+      errorMessage: 'Bad Request'
+    };
+    
+    try {
+      const dbUrl = namespace.getMustExist(context, 'traveller.config.database.url');
+      const userId = namespace.getMustExist(req.body, 'userId');
+      
+      responseBody.results = { dbUrl, userId };
+      responseBody.statusCode = 200;
+      responseBody.success = true;
+      delete responseBody.errorMessage;
+    } catch (error) {
+      responseBody.errorMessage = error.message;
+    }
+    
+    res.status(responseBody.statusCode).json(responseBody);
+    
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.jsonBody.success, true);
+    assert.deepStrictEqual(res.jsonBody.results, {
+      dbUrl: 'postgres://localhost/app',
+      userId: 'user-123'
+    });
+    assert.strictEqual(res.jsonBody.errorMessage, undefined);
+  });
+
+  it('should include full path in getMustExist errors', () => {
+    const context = {};
+    
+    try {
+      namespace.getMustExist(context, 'traveller.config.database.url');
+      assert.fail('Should have thrown');
+    } catch (error) {
+      assert.ok(error.message.includes('Property not found'));
+      assert.ok(error.message.includes('traveller.config.database.url'));
+    }
+  });
+
+  it('should support custom error messages for API validation', () => {
+    const req = { body: {} };
+    
+    try {
+      namespace.getMustExist(req.body, 'userId', {
+        errorMessage: 'API Error: userId is required'
+      });
+      assert.fail('Should have thrown');
+    } catch (error) {
+      assert.ok(error.message.includes('API Error: userId is required'));
+    }
+  });
+
+  it('should distinguish missing vs null in form validation', () => {
+    const fieldDefs = {
+      name: { required: true },
+      email: { required: true },
+      phone: { required: false }
+    };
+    
+    // Case 1: field not provided (NotFound)
+    const appDataMissing = { fieldValues: {} };
+    const nameMissing = namespace.getIfExists(appDataMissing, 'fieldValues.name');
+    assert.strictEqual(namespace.isNotFound(nameMissing), true);
+    
+    // Case 2: field explicitly null
+    const appDataNull = { fieldValues: { email: null } };
+    const emailNull = namespace.getIfExists(appDataNull, 'fieldValues.email');
+    assert.strictEqual(namespace.isNotFound(emailNull), false);
+    assert.strictEqual(emailNull, null);
+    
+    // Case 3: field exists with falsy values
+    const appDataFalsy = { fieldValues: { phone: '' } };
+    const phoneEmpty = namespace.getIfExists(appDataFalsy, 'fieldValues.phone');
+    assert.strictEqual(namespace.isNotFound(phoneEmpty), false);
+    assert.strictEqual(phoneEmpty, '');
+  });
+
+  it('should support dynamic namespace path building', () => {
+    const context = {
+      tenants: {
+        'tenant-1': { config: { theme: 'light' } },
+        'tenant-2': { config: { theme: 'dark' } }
+      }
+    };
+    
+    function getTenantConfig(tenantId) {
+      const tenantNamespace = `tenants.${tenantId}.config`;
+      return namespace.getIfExists(context, tenantNamespace, {
+        defaultValueToReturn: { theme: 'default' }
+      });
+    }
+    
+    assert.deepStrictEqual(getTenantConfig('tenant-1'), { theme: 'light' });
+    assert.deepStrictEqual(getTenantConfig('tenant-2'), { theme: 'dark' });
+    assert.deepStrictEqual(getTenantConfig('tenant-999'), { theme: 'default' });
+  });
+
+  it('should support safe cache initialization pattern', () => {
+    const context = {};
+    
+    // First call creates cache
+    const cache1 = namespace.leafNode(context, 'cache.users', new Map());
+    cache1.set('user-1', { name: 'Alice' });
+    
+    // Second call returns existing cache
+    const cache2 = namespace.leafNode(context, 'cache.users', new Map());
+    
+    assert.strictEqual(cache1, cache2);
+    assert.deepStrictEqual(cache2.get('user-1'), { name: 'Alice' });
+  });
+});
+
 describe('namespace module exports', () => {
   it('should export namespace function', () => {
     assert.strictEqual(typeof namespace, 'function');

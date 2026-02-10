@@ -78,6 +78,91 @@ const cache = namespace.leafNode(app, 'cache.users', new Map());
 // cache is app.cache.users — creates Map only if didn't exist
 ```
 
+## API Endpoint Pattern
+
+A common production pattern for REST API endpoints with validation, error handling, and standardized responses:
+
+```javascript
+function handleApiRequest(req, res, context) {
+  // Standard response envelope
+  const responseBody = {
+    success: false,
+    statusCode: 400,
+    errorMessage: 'Bad Request'
+  };
+  
+  try {
+    // Fail-fast validation with rich error context
+    // Error will include full path if missing: "traveller.config.database.url"
+    const dbUrl = namespace.getMustExist(
+      context,
+      'traveller.config.database.url',
+      { errorMessage: 'API Error: Database configuration missing' }
+    );
+    
+    // Validate required request fields
+    const userId = namespace.getMustExist(
+      req.body,
+      'userId',
+      { errorMessage: 'API Error: userId is required' }
+    );
+    
+    // Optional field with default
+    const includeMeta = namespace.getIfExists(
+      req.body,
+      'options.includeMeta',
+      { defaultValueToReturn: false }
+    );
+    
+    // Safe cache initialization
+    const cache = namespace.leafNode(context, 'cache.users', new Map());
+    
+    // Process request...
+    const result = { userId, dbUrl, includeMeta };
+    
+    // Success response
+    responseBody.results = result;
+    responseBody.statusCode = 200;
+    responseBody.success = true;
+    delete responseBody.errorMessage;
+    
+  } catch (error) {
+    // Error includes full namespace path for debugging
+    responseBody.errorMessage = error.message;
+    if (error.message.includes('Not Authorised')) {
+      responseBody.statusCode = 403;
+    }
+  }
+  
+  return res.status(responseBody.statusCode).json(responseBody);
+}
+```
+
+### Form Validation with Distinguishable Missing vs Null
+
+```javascript
+function validateField(applicationData, fieldName, fieldDef) {
+  const fieldValue = namespace.getIfExists(
+    applicationData, 
+    `fieldValues.${fieldName}`
+  );
+  
+  // Distinguish: not provided vs explicitly null
+  if (namespace.isNotFound(fieldValue)) {
+    return fieldDef.required ? `Field '${fieldName}' is required` : null;
+  }
+  
+  if (fieldValue === null && fieldDef.required && !fieldDef.allowNull) {
+    return `Field '${fieldName}' cannot be null`;
+  }
+  
+  // Field exists (even if empty string, 0, false)
+  return null;
+}
+```
+
+See `examples/api-endpoint.js` for a complete working example.
+
 ## API
 
 ### `namespace(object, address, defaultList?, checkExists?)`

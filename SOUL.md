@@ -1,0 +1,1 @@
+/home/sirGranite/.openclaw/workspace/SOUL.md
