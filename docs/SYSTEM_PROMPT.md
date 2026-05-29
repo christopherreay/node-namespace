@@ -74,6 +74,9 @@ READING EXISTING CODE:
 - getIfExists + isNotFound means initialization or boundary point
 - leafNode with a default value on request body fields means optional input
 
+SINGLE RETURN, SINGLE PATH:
+Prefer one try/catch block and one return at the end of each function. Use the responseBody pattern — build state forward through the function, catch errors into the same state, return once at the end. Early returns create invisible gates: later code silently depends on earlier conditions, which a reader must hold in their head. If multiple try/catch blocks or early returns are genuinely needed, mark them with a comment explaining the semantic reason.
+
 ANTI-PATTERNS — NEVER generate:
 - obj?.a?.b?.c           → use namespace.getIfExists(obj, 'a.b.c')
 - if (obj.count)         → use if (namespace.exists(obj, 'count'))

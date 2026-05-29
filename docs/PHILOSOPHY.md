@@ -107,3 +107,39 @@ At every scale — configuration loading, API handling, stateful services, data 
 4. **Build** (setValue, leafNode)
 
 `namespace` makes this loop cheap to run at any point in the code. You don't need to think about the whole schema. You think about *here*, and what should be true *now*. The specification accumulates across the codebase as you go.
+
+## Single Return, Single Path
+
+Every `return` statement inside a function is a branch that exits the execution tree. Code written after a `return` depends silently on every preceding condition — those conditions are invisible to a reader who starts from that point. The more early returns there are, the more silent gates you must hold in your head to understand any given line.
+
+A single return at the end of a function means the function is a **straight path**. Every branch modifies state rather than exiting. You can read the whole function as a sequence of transformations on that state — what happened is written into the state, not encoded in which return path was taken.
+
+The namespace `responseBody` pattern makes this natural:
+
+```javascript
+const responseBody = { success: false, statusCode: 400, errorMessage: "Bad Request" }
+
+try {
+  const userId = namespace.getMustExist(req, "user.id")
+  const text   = namespace.getMustExist(req, "body.text", { errorMessage: "text is required" })
+  const mood   = namespace.leafNode(req, "body.mood", null)
+
+  const result = await query(...)
+
+  namespace.setValue(responseBody, "data", result.rows[0])
+  delete responseBody.errorMessage
+  responseBody.statusCode = 201
+  responseBody.success    = true
+
+} catch (error) {
+  responseBody.errorMessage = error.message
+}
+
+return res.status(responseBody.statusCode).json(responseBody)
+```
+
+The try/catch catches anything unexpected. The `responseBody` accumulates the story of what happened. The single return sends whatever state was reached. No invisible gates, no silent preconditions.
+
+If there is a genuine semantic reason for multiple try/catch blocks or an early return — a meaningful phase boundary, a clearly different error domain — mark it heavily so a reader knows the structure is intentional, not accidental.
+
+This is the "build forward" model applied to control flow. Just as namespace paths accumulate the data contract across a codebase, the response body accumulates the story of a request across a function. Both are the same idea at different scales: state flows forward, and its shape at any point tells the full story of how it got there.
