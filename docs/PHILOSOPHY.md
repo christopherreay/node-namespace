@@ -140,6 +140,14 @@ return res.status(responseBody.statusCode).json(responseBody)
 
 The try/catch catches anything unexpected. The `responseBody` accumulates the story of what happened. The single return sends whatever state was reached. No invisible gates, no silent preconditions.
 
-If there is a genuine semantic reason for multiple try/catch blocks or an early return — a meaningful phase boundary, a clearly different error domain — mark it heavily so a reader knows the structure is intentional, not accidental.
+If there is a genuine semantic reason for an early exit — a meaningful phase boundary, a clearly different error domain — mark it heavily so a reader knows the structure is intentional, not accidental.
+
+This applies equally to  and  inside loops. A  is a return from a loop: code after it (inside or outside the loop body) silently depends on whether the break was taken. When a break is genuinely required, make it impossible to miss:
+
+
+
+The marking convention — heavy, visually weighted, indented to match the break — makes the exit a first-class visible thing. A reader scanning the loop cannot pass over it without seeing it. The same convention applies to .
+
+The general principle: every exit from a code structure (, , ) creates an invisible assertion for anything that follows. In the common case, eliminate the exit by restructuring around state. When the exit is genuinely the right tool, make it visible.
 
 This is the "build forward" model applied to control flow. Just as namespace paths accumulate the data contract across a codebase, the response body accumulates the story of a request across a function. Both are the same idea at different scales: state flows forward, and its shape at any point tells the full story of how it got there.
