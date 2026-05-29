@@ -1,173 +1,109 @@
-# Philosophy (laid bare)
+# Philosophy
 
-`namespace` is not a programming paradigm. It’s a boundary tool.
+## Writing Code in the Present Tense — Prescriptively
 
-It lives at the seam between two kinds of structure:
+`namespace` is built around a single discipline: **at each point in your code, make a precise claim about what should be true here**.
 
-## 1) Hard structure (the world of objects)
+Not a schema. Not a type declaration. A claim — specific to *this location in the execution flow* — about what the data must look like for this code to be correct.
 
-At runtime, JavaScript gives you an object graph: keys, values, references, mutation, identity.
+```javascript
+// At the gate: "the system should handle both cases — user present or absent"
+if (!namespace.exists(req, 'user.id')) {
+  return redirect('/login');
+}
 
-That structure is *hard* in the sense that it behaves like physics:
-- deterministic rules
-- causal consequences
-- constraints you cannot negotiate with by intention alone
+// Inside the protected route: "user.id MUST exist here — if it doesn't, something upstream is broken"
+const userId = namespace.getMustExist(req, 'user.id');
+```
 
-If you reach into the graph at the wrong place, you get the classic error:
-> “cannot read property of undefined”
+The same path. Two different claims. Both prescriptive — each one specifies what *should* be true for the code to be correct at that moment.
 
-## 2) Soft structure (the world of names)
+This is not just documentation of what you know. It is a **specification of what must hold** — written at the point of use, distributed across the codebase.
 
-Humans don’t hold the whole object graph in their heads. We hold **names** and **maps**.
+## Assertions as Distributed Specification
 
-A dotted path like:
+You don't declare a schema once. You write code, and as you write each function, handler, and service, you assert what the data contract should be at that point.
 
-- `"user.profile.name"`
-- `"config.server.port"`
-- `"graph.applicationsCollection"`
+When you write `getMustExist` in a new feature, you are not just describing your current knowledge. You are specifying an invariant: *for this feature to be correct, this path must exist here*. The rest of the codebase either already satisfies that invariant, or it needs to be updated to do so. The assertion is a claim the codebase must honour — and crucially, you can write it before the upstream code that satisfies it exists. The consuming code is written first; the assertion specifies what the implementation must provide.
 
-is soft structure: an *arbitrary symbolic network* that carries meaning.
+This is what makes it possible to add non-trivial features confidently. You write the new code first, asserting what should be true at each point. The assertions become a distributed specification. Other call sites that establish, read, or modify the same paths are automatically in a relationship with your assertions — and if something is wrong, the failure is precisely located.
 
-It’s editable. It evolves. It’s artful. It’s a shared language.
+Over time, the full data contract *emerges* from the sum of all those assertions. It is always accurate, because each call site is the live truth about what should hold at that location in the program.
 
-## 3) The seam: where information lives
+## The Constant Pattern
 
-A dotted path is not the data — it’s an encoding of a traversal and an intention.
+As namespaces accumulate, anchor your subtrees with named constants:
 
-The central question at the seam is:
+```javascript
+const combatJournal_namespace = "context.projects.combatJournal"
 
-> Does this name correspond to structure that exists?
+// Throughout the module:
+namespace.getMustExist(state, `${combatJournal_namespace}.currentSession`)
+namespace.leafNode(state, `${combatJournal_namespace}.entries`, [])
+namespace.getIfExists(state, `${combatJournal_namespace}.lastSaved`, { defaultValueToReturn: null })
+```
 
-Most code collapses crucial distinctions at this seam by returning `undefined` for everything.
+This does three things:
 
-`namespace` refuses to collapse meaning.
+1. **One place to refactor** — change the root path in one line and everything follows
+2. **Greppable taxonomy** — grep for `_namespace =` to extract the full domain model of a codebase as a machine-readable index
+3. **Module scoping** — makes clear what data belongs to what module
 
-### NotFound is a preserved bit
+The constant name is not just a pointer to a string. It is a mental handle — the name of the concept in the domain. `combatJournal_namespace` means something. That meaning is why the paths are memorable: they are taxonomic. They mirror how you think about the domain, so they map onto memory naturally. This is also why names must always be fully descriptive — never abbreviated. An abbreviated name destroys the conceptual handle.
 
-A missing path and a present-but-undefined value are different facts.
+## Each Call Makes a Claim
 
-- missing path → *no signal was ever placed there*
-- undefined value → *a signal was placed there, and it was undefined*
+A single namespace call specifies:
 
-Most utilities return `undefined` for both and destroy that difference.
+- **What** is being accessed (the path)
+- **What subtree** it belongs to (via the constant)
+- **What should be true about it** at this point in execution (the function)
 
-`namespace` keeps the distinction via a sentinel:
+`getMustExist` says: *this must exist here — I am specifying an invariant.*
 
-- `namespace.NotFound`
-- `namespace.isNotFound(value)`
+`getIfExists` says: *this may or may not exist — the system should handle both.*
 
-That one choice makes validation, merging, and partial updates far less ambiguous.
+`leafNode` says: *this should be initialized; if it hasn't been, I am doing it now.*
 
-## 4) Safety is the default
+`setValue` says: *I am building structure forward — this path should now exist.*
 
-`setValue` refuses to overwrite unless you explicitly opt in.
+`exists` says: *the correct behaviour differs depending on presence — not on truthiness.*
 
-This is a design stance:
-- accidental mutation is more common than intentional mutation
-- the cost of a silent overwrite is higher than the cost of an explicit flag
+Reading these at a call site, you understand the author's intent about what the world should look like at that moment — not just what they observed.
 
-So the default is a protective boundary.
+## Deep Trees Are Intentional
 
-## 5) The layers where this stays true (growth → interaction → reality)
+Paths like `context.projects.combatJournal.sessions.current.entries` are not verbose — they are taxonomic. The depth *is* the domain model. Each segment is a decision about what category this thing belongs to, and how it relates to its parent.
 
-The same boundary principle shows up at multiple scales.
+Because paths are deep, conflicts between parts of the codebase are rare. Two modules accidentally asserting different things about the same namespace path is unlikely when paths are specific. The tree self-organizes. It is rarely wrong, and when it is, it is easy to change: update the constant.
 
-### Layer A — Growing *into* a domain (design-time fluidity)
+## NotFound Preserves Meaning
 
-This is the phase where the schema is not yet fully known.
+Most utilities return `undefined` for both "this path doesn't exist" and "this path exists but its value is undefined." That destroys a distinction that often matters.
 
-- You want to **sketch structure into existence** without ceremony.
-- You want to **postpone commitment** until the domain has revealed itself.
+```javascript
+const result = namespace.getIfExists(obj, 'user.optedOut');
 
-What helps here:
-- `namespace()` / `setValue()` let you grow structure as you discover it.
-- `leafNode()` lets you establish defaults without clobbering later discoveries.
-- `exists()` avoids mistakes caused by falsy-but-meaningful values.
+if (namespace.isNotFound(result)) {
+  // The field was never set — we have no information about the user's preference
+} else if (result === false) {
+  // The field exists and is explicitly false — user has not opted out
+} else if (result === undefined) {
+  // The field exists but was set to undefined — unusual, but distinguishable
+}
+```
 
-### Layer B — Domain ↔ domain interaction (translation boundaries)
+`namespace.NotFound` is a preserved bit. It keeps a distinction that normal code collapses — the difference between *no signal was placed here* and *a signal was placed here, and it was undefined*.
 
-This is where different models negotiate meaning: APIs, storage schemas, third‑party services, other teams.
+This matters most at boundaries: API validation, form processing, partial updates, config loading. Any place where the difference between "not provided" and "provided as null" is meaningful.
 
-At boundaries you get mismatch:
-- different naming conventions
-- optional vs required disagreements
-- version drift
+## The Development Loop
 
-What helps here:
-- Dotted paths become a **translation surface** between shapes.
-- `getMustExist({ errorMessage })` becomes contract enforcement.
-- `flatten()` / `expand()` let you treat deep structure as an addressable keyspace (overlay, project, merge).
+At every scale — configuration loading, API handling, stateful services, data pipelines — the pattern is the same:
 
-### Layer C — Domain ↔ reality (runtime concreteness)
+1. **Name** the thing (choose a path that fits the taxonomy)
+2. **Claim** (what should be true here? what must hold for this code to be correct?)
+3. **Assert** (getMustExist, getIfExists, exists)
+4. **Build** (setValue, leafNode)
 
-This is where you touch live data: requests, DB rows, sensors, payments.
-
-Reality is messy:
-- fields missing
-- fields present but null
-- partial updates
-- ambiguity around `undefined`
-
-What helps here:
-- `NotFound` preserves the difference between “missing” and “present-but-empty”.
-- `getIfExists({ defaultValueToReturn })` enables graceful degradation.
-- Safety-by-default `setValue` reduces silent corruption in long-lived state.
-
-## 6) Why this is powerful for LLMs
-
-LLMs operate mainly in soft structure (symbols). The runtime is hard structure.
-
-`namespace` is a disciplined bridge:
-- paths are explicit
-- missing vs present is explicit
-- required data can fail fast with context
-- structure can be grown safely without boilerplate
-
-It doesn’t “solve programming.”
-
-It stabilizes one of the most failure-prone boundaries: **names touching structure**.
-
-## 7) Ergonomics (should feel natural while typing)
-
-A philosophy is only real if it survives contact with fingers on a keyboard.
-
-This library is meant to *match the developer’s live design loop*:
-
-- **Name** the thing (a path is the thought)
-- **Probe** the shape (what exists? what’s missing?)
-- **Harden** a decision (required vs optional)
-- **Act** to grow/correct structure safely
-
-So the API should read like a sentence the developer is already forming:
-
-- “Get it if it exists, otherwise I’ll handle it” → `getIfExists(..., { defaultValueToReturn })`
-- “This must exist; fail clearly” → `getMustExist(..., { errorMessage })`
-- “Set this, but don’t stomp earlier meaning unless I say so” → `setValue(..., { overwrite: true })`
-- “Initialize if absent; otherwise leave it alone” → `leafNode(...)`
-
-The dotted path is the point where thought becomes structure. Keeping it explicit (and keeping `NotFound` distinct from `undefined`) prevents intent from collapsing into ambiguity.
-
-## 8) The cybernetic angle (what the tool is really doing)
-
-Cybernetics, at minimum, is about **regulation via feedback**: a system stays coherent by continuously comparing intention to reality and correcting.
-
-`namespace` supports that regulation loop at the naming↔structure seam:
-
-- **You propose** a name/path (soft structure).
-- **You test** whether it corresponds to reality (`exists`, `getIfExists`, `NotFound`).
-- **You enforce** a constraint when the system must be in a particular state (`getMustExist`).
-- **You act** to grow or correct structure (`setValue`, `leafNode`, `remove`).
-
-In other words: it makes it cheap to run the loop:
-
-> model → probe → decide → write → re‑probe
-
-Across layers (design, integration, runtime), the “core thing” is the same:
-
-> preserving distinctions and making corrections at the boundary where symbols meet structure.
-
----
-
-If you remember one sentence:
-
-> `namespace` is a small tool that prevents meaning from collapsing at the seam between arbitrary naming and real structure.
+`namespace` makes this loop cheap to run at any point in the code. You don't need to think about the whole schema. You think about *here*, and what should be true *now*. The specification accumulates across the codebase as you go.

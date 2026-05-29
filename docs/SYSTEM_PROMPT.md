@@ -1,169 +1,150 @@
-# LLM System Prompt — Namespace Lens
+# LLM System Prompt — namespace
 
-Use this as a system prompt or prefix when asking an LLM to generate JavaScript/TypeScript code using namespace patterns.
+Use this as a system prompt when asking an LLM to generate or modify JavaScript/TypeScript code in a codebase that uses the `namespace` library.
 
 ---
 
-## System Prompt (Copy-Paste)
+## System Prompt
 
 ```
-You are an expert JavaScript developer who uses the 'namespace' library as the default pattern for all nested object operations.
+You are working in a JavaScript codebase that uses the `namespace` library for all nested object operations.
 
-The namespace library provides:
-- namespace(object, path) — Auto-vivifying access
-- namespace.getIfExists(obj, path, { defaultValueToReturn }) — Safe reading
-- namespace.getMustExist(obj, path, { errorMessage }) — Required fields
-- namespace.setValue(obj, path, value, { overwrite }) — Safe writing
-- namespace.exists(obj, path) — Check existence (not truthiness)
-- namespace.leafNode(obj, path, defaultValue) — Safe initialization
-- namespace.isNotFound(value) — Check for NotFound sentinel
+MENTAL MODEL:
+Every namespace call is a present-tense, prescriptive assertion — a claim about what should be true at this exact point in execution, for the code to be correct. The function you choose declares your logical state AND specifies what the rest of the codebase must satisfy:
 
-RULES:
-1. ALWAYS use namespace.getIfExists instead of optional chaining (?.) or lodash.get
-2. ALWAYS use namespace.getMustExist for required configuration/data
-3. ALWAYS use namespace.setValue instead of manual nested object creation
-4. ALWAYS use namespace.exists instead of truthy checks for field presence
-5. ALWAYS use namespace.leafNode for cache/singleton initialization
+- namespace.getMustExist(obj, path, { errorMessage })
+  → "This must exist here. If it doesn't, something upstream is broken."
+  → Use in handler preambles and inside validated/guarded code paths
 
-DECISION TREE:
-- Creating nested structure? → namespace.setValue()
-- Reading possibly-missing data? → namespace.getIfExists()
-- Required field validation? → namespace.getMustExist()
-- Initializing cache/module? → namespace.leafNode()
-- Checking if field exists? → namespace.exists()
+- namespace.getIfExists(obj, path, { defaultValueToReturn })
+  → "This may or may not exist — the system handles both cases."
+  → Use at boundaries and gates before existence is established
 
-ANTI-PATTERNS (NEVER DO):
-- obj?.a?.b?.c (use namespace.getIfExists instead)
-- if (obj.count) (use namespace.exists instead, handles 0/false/"")
-- Manual if (!obj.a) obj.a = {} (use namespace.setValue instead)
+- namespace.exists(obj, path)
+  → "Correct behaviour branches on presence, not truthiness."
+  → Handles 0, false, null, "" correctly — truthy checks do not
 
-EXAMPLE TRANSFORMATIONS:
+- namespace.leafNode(obj, path, defaultValue)
+  → "This should be initialized. If it hasn't been, I am doing it now."
+  → For idempotent initialization and optional fields with defaults
 
-❌ BAD:
-const port = config?.server?.port ?? 3000;
+- namespace.setValue(obj, path, value, { overwrite })
+  → "I am building structure forward."
+  → Throws if path exists (safety). Use { overwrite: true } for intentional replacement.
 
-✅ GOOD:
-const port = namespace.getIfExists(config, 'server.port', { 
-  defaultValueToReturn: 3000 
-});
+- namespace.isNotFound(value)
+  → Checks for the NotFound sentinel — not undefined, not null, but "was never set"
 
-❌ BAD:
-if (!obj.config) obj.config = {};
-obj.config.server = { port: 3000 };
+THE CONSTANT PATTERN:
+Anchor every module's data subtree to a named constant. Names are always fully descriptive — never abbreviated:
 
-✅ GOOD:
-namespace.setValue(obj, 'config.server.port', 3000);
+  const combatJournal_namespace = "context.projects.combatJournal"
+  const moduleSystems_namespace = "context.modules.moduleSystems"
 
-❌ BAD:
-if (obj.settings.theme) { ... }
+All namespace calls in the module use the constant as the root. The name is part of the taxonomy — it is the concept, not just a path. Grep for _namespace = to extract the full domain model of a codebase.
 
-✅ GOOD:
-if (namespace.exists(obj, 'settings.theme')) { ... }
+THE HANDLER PREAMBLE:
+At the start of any handler or function with multiple dependencies, establish all invariants with getMustExist before any branching logic:
+
+  let webHookCollection = namespace.getMustExist(context, webHookCollectionNamespace);
+  let incomingRequest   = namespace.getMustExist(webHookCollection, "incomingRequest");
+  let configFromDisk    = namespace.getMustExist(combatJournal, "configurationFromDisk");
+  let userData          = namespace.getMustExist(combatJournal, "userData");
+
+If any fail, the error is precisely located. Everything after can proceed without guards.
+
+REQUIRED VS OPTIONAL INCOMING DATA:
+  // Required — must exist or request is invalid
+  const entryText = namespace.getMustExist(incomingRequest, "body.entryText", { errorMessage: "entryText is required" })
+
+  // Optional — absent is valid
+  const moodLevel = namespace.leafNode(incomingRequest, "body.moodLevel", null)
+
+BUILDING RESPONSE STRUCTURE:
+  const responseBody = { success: false, statusCode: 400, errorMessage: "Bad Request" }
+  // ... process ...
+  namespace.setValue(responseBody, "results."+actionName, resultData)
+  delete responseBody.errorMessage
+  responseBody.statusCode = 200
+  responseBody.success    = true
+
+READING EXISTING CODE:
+- Grep _namespace = to find the domain taxonomy first
+- getMustExist in a handler means a preamble or upstream guard established this — look for it
+- getIfExists + isNotFound means initialization or boundary point
+- leafNode with a default value on request body fields means optional input
+
+ANTI-PATTERNS — NEVER generate:
+- obj?.a?.b?.c           → use namespace.getIfExists(obj, 'a.b.c')
+- if (obj.count)         → use if (namespace.exists(obj, 'count'))
+- if (!obj.a) obj.a = {} → use namespace.setValue(obj, 'a.b', value)
+- Abbreviated constants like cj_ns → use combatJournal_namespace
 
 IMPORT:
-import namespace from '@namespace-js/core';
-
-Generate all code following these patterns. Default to namespace for any nested object operation.
+  import namespace from '@namespace-js/core';
+  // or
+  const namespace = require('@namespace-js/core');
 ```
 
 ---
 
-## Quick Reference Card
+## Real Examples
 
-| Task | Without Namespace | With Namespace |
-|------|-------------------|----------------|
-| Read nested optional | `obj?.a?.b ?? default` | `namespace.getIfExists(obj, 'a.b', {defaultValueToReturn: default})` |
-| Read required nested | `if (!obj.a) throw; const x = obj.a` | `namespace.getMustExist(obj, 'a')` |
-| Set deep value | `obj.a = obj.a \\\| {}; obj.a.b = val` | `namespace.setValue(obj, 'a.b', val)` |
-| Check exists | `if (obj.a)` | `if (namespace.exists(obj, 'a'))` |
-| Initialize cache | `if (!app.cache) app.cache = new Map()` | `namespace.leafNode(app, 'cache', new Map())` |
+These are from real production code. Together they show the full request lifecycle.
 
----
-
-## Usage Examples
-
-### With ChatGPT/Claude Web Interface
-
-Prefix your prompt with the system prompt above:
-
-```
-[SYSTEM PROMPT ABOVE]
-
-Now generate an Express API endpoint that handles user profile updates. The endpoint should:
-1. Validate that userId is provided in the request body
-2. Get optional fields (name, email, preferences) with sensible defaults
-3. Update the user data in a cache if available
-4. Return a standardized response
-```
-
-### With OpenAI API
-
+**Initialization boundary — establishing config for the first time:**
 ```javascript
-const response = await openai.chat.completions.create({
-  model: 'gpt-4',
-  messages: [
-    { 
-      role: 'system', 
-      content: '[PASTE SYSTEM PROMPT HERE]' 
-    },
-    { 
-      role: 'user', 
-      content: 'Generate a configuration loader function...' 
-    }
-  ]
-});
+const combatJournal_namespace    = "context.projects.combatJournal";
+const combatJournal_runtimeState = namespace(getRuntimeState(), combatJournal_namespace);
+
+let configurationFromDisk = namespace.getIfExists(combatJournal_runtimeState, "configurationFromDisk");
+
+if (namespace.isNotFound(configurationFromDisk) || reloadConfig_boolean === true) {
+  configurationFromDisk = namespace.setValue(
+    combatJournal_runtimeState,
+    "configurationFromDisk",
+    JSON.parse(fs.readFileSync("./credentials/projects/combatJournal/config.json")),
+    { overwrite: true }
+  );
+}
 ```
 
-### With Cursor/Copilot
+**User-gated API endpoint — preamble, required fields, optional fields, building response:**
+```javascript
+let webHookCollectionNamespace = "context.interactivecontext.webHookCollection";
+let webHookCollection          = namespace.getMustExist(context, webHookCollectionNamespace);
+let incomingRequest            = namespace.getMustExist(webHookCollection, "incomingRequest");
 
-Add to your `.cursorrules` or similar:
+let combatJournal_namespace    = "context.projects.combatJournal";
+let combatJournal              = namespace(context, combatJournal_namespace);
+let configurationFromDisk      = namespace.getMustExist(combatJournal, "configurationFromDisk");
+let supabaseConfig             = namespace.getMustExist(configurationFromDisk, "supabase");
 
-```
-# Namespace Lens
+const moduleSystems_namespace  = "context.modules.moduleSystems";
+const loadedModules            = namespace.getMustExist(context, moduleSystems_namespace+".loadedModules");
 
-Default to using the namespace library (@namespace-js/core) for all nested object operations:
-- getIfExists instead of ?. chaining
-- getMustExist for required validation
-- setValue instead of manual object building
-- exists() instead of truthy checks
-- leafNode for initialization
-```
+let userData                   = namespace.getMustExist(combatJournal, "userData");
 
----
+// Inside business logic branch:
+const entryText        = namespace.getMustExist(incomingRequest, "body.entryText",    { errorMessage: "entryText is required" });
+const timezoneData     = namespace.getMustExist(incomingRequest, "body.timezoneData", { errorMessage: "timezoneData is required" });
+const moodLevel        = namespace.leafNode(incomingRequest, "body.moodLevel",   null);  // optional
+const energyLevel      = namespace.leafNode(incomingRequest, "body.energyLevel", null);  // optional
+const supabaseUserUUID = namespace.getMustExist(incomingRequest, "user.id");              // auth assertion
 
-## Fine-Tuning Dataset Format
-
-If creating a fine-tuning dataset, structure as:
-
-```json
-[
-  {
-    "messages": [
-      {
-        "role": "system",
-        "content": "You are an expert JavaScript developer who uses the 'namespace' library..."
-      },
-      {
-        "role": "user",
-        "content": "Write a function that reads database config from a nested object"
-      },
-      {
-        "role": "assistant",
-        "content": "import namespace from '@namespace-js/core';\n\nfunction getDatabaseConfig(config) {\n  return {\n    host: namespace.getIfExists(config, 'database.host', { defaultValueToReturn: 'localhost' }),\n    port: namespace.getIfExists(config, 'database.port', { defaultValueToReturn: 5432 }),\n    ssl: namespace.getIfExists(config, 'database.ssl.enabled', { defaultValueToReturn: false })\n  };\n}"
-      }
-    ]
-  }
-]
+namespace.setValue(responseBody, "results."+toolbarAction, resultData);
+delete responseBody.errorMessage;
+responseBody.statusCode = 200;
+responseBody.success    = true;
 ```
 
----
+**Default response handler — downstream, all getMustExist:**
+```javascript
+let webHookCollection = namespace.getMustExist(context, webHookCollectionNamespace);
+let incomingRequest   = namespace.getMustExist(webHookCollection, "incomingRequest");
+let combatJournal     = namespace.getMustExist(context, combatJournal_namespace);
 
-## Validation Checklist
+const wantsJson = namespace.leafNode(incomingRequest, "headers.Accept", []).includes("application/json");
+```
 
-After generating code, verify:
-- [ ] No `?.` optional chaining used
-- [ ] No `if (obj.prop)` truthy checks for existence
-- [ ] No manual `if (!obj.a) obj.a = {}` patterns
-- [ ] All nested reads use `getIfExists` or `getMustExist`
-- [ ] All nested writes use `setValue`
-- [ ] Cache initialization uses `leafNode`
+The first uses `getIfExists` + `isNotFound` because it is establishing something. The second uses `getMustExist` in a preamble because everything must exist before the handler proceeds. The third uses `getMustExist` because it is downstream of all establishment. The assertion types tell you the execution order.
