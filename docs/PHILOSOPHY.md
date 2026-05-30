@@ -151,3 +151,40 @@ The marking convention — heavy, visually weighted, indented to match the break
 The general principle: every exit from a code structure (, , ) creates an invisible assertion for anything that follows. In the common case, eliminate the exit by restructuring around state. When the exit is genuinely the right tool, make it visible.
 
 This is the "build forward" model applied to control flow. Just as namespace paths accumulate the data contract across a codebase, the response body accumulates the story of a request across a function. Both are the same idea at different scales: state flows forward, and its shape at any point tells the full story of how it got there.
+
+## statusCode as a Position Marker
+
+The same principle that makes `// ********BREAK` useful applies to the `responseBody.statusCode` field during request processing.
+
+Rather than setting the statusCode *after* something fails, set it *before* the operation that might fail. The statusCode then tracks where you are in the execution — so if anything below that line throws, the outer catch already has the right answer:
+
+```javascript
+const responseBody = { success: false, statusCode: 500, errorMessage: "Internal Server Error" }
+
+try {
+  // Preamble — system invariants
+  const config = namespace.getMustExist(getRuntimeState(), `${journalAPI_namespace}.configurationFromDisk`)
+  const dbPool = namespace.getMustExist(getRuntimeState(), `${journalAPI_namespace}.database.pool`)
+
+  responseBody.statusCode = 400  // validation — client fault from here
+  const email    = namespace.getMustExist(incomingRequest, "body.email",    { errorMessage: "email is required" })
+  const password = namespace.getMustExist(incomingRequest, "body.password", { errorMessage: "password is required" })
+
+  responseBody.statusCode = 500  // execution — server fault from here
+  const result = await dbPool.query("SELECT ...", [email])
+
+  responseBody.data       = result.rows[0]
+  responseBody.statusCode = 200
+  responseBody.success    = true
+  delete responseBody.errorMessage
+
+} catch (error) {
+  responseBody.errorMessage = error.message
+}
+
+return res.status(responseBody.statusCode).json(responseBody)
+```
+
+The statusCode assignment is itself the phase marker — it names the boundary between validation and execution in the same way a comment would, but also does real work. No inner try/catch, no error tagging, no fallback logic in the catch. The `responseBody` is the single source of truth for the state of the request at every point in the function.
+
+This is the "build forward" model applied to error semantics: the statusCode builds forward through the function just as the data does, and at any point its value reflects what kind of failure would be reported from here.

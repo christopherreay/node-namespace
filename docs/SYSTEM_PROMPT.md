@@ -74,6 +74,18 @@ READING EXISTING CODE:
 - getIfExists + isNotFound means initialization or boundary point
 - leafNode with a default value on request body fields means optional input
 
+STATUSCODE AS POSITION MARKER:
+Set responseBody.statusCode BEFORE the operation that might fail, not after. The statusCode tracks where you are in execution — if anything throws, the outer catch already has the right answer:
+
+  responseBody.statusCode = 400  // validation — client fault from here
+  const email = namespace.getMustExist(incomingRequest, "body.email", { errorMessage: "email is required" })
+
+  responseBody.statusCode = 500  // execution — server fault from here
+  const result = await dbPool.query(...)
+
+The outer catch is then just: responseBody.errorMessage = error.message
+No inner try/catch, no error tagging, no fallback logic needed.
+
 SINGLE RETURN, SINGLE PATH:
 Prefer one try/catch block and one return at the end of each function. Use the responseBody pattern — build state forward through the function, catch errors into the same state, return once at the end. Early returns create invisible gates: later code silently depends on earlier conditions, which a reader must hold in their head. If multiple try/catch blocks or early returns are genuinely needed, mark them with a comment explaining the semantic reason.
 
