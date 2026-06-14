@@ -1,5 +1,5 @@
 // NotFound sentinel — frozen; returned by get() when a path is absent
-export const NotFound = Object.freeze({ namespaceFunctionConstant: "NotFound" });
+export const NotFound: Readonly<{ namespaceFunctionConstant: "NotFound" }> = Object.freeze({ namespaceFunctionConstant: "NotFound" });
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
@@ -287,7 +287,13 @@ export function isNotFound(value: unknown): boolean {
 // Pure path-string algebra — no tree argument.
 // Every function here takes strings (or arrays of strings) and returns strings.
 
-export const path = {
+export const path: {
+  join(...parts: (string | string[])[]): string;
+  joinSlash(...parts: (string | string[])[]): string;
+  split(dottedPath: string): string[];
+  isRootOf(rootPath: string, targetPath: string): boolean;
+  tween(dottedPath: string, tweenSegment?: string): string | undefined;
+} = {
 
   // join("users", userId, "entries")  →  "users.alice.entries"
   // join("a.b", ["c", "d"])           →  "a.b.c.d"
@@ -344,7 +350,11 @@ export const path = {
 // Operations that apply a point contract across multiple paths in one call.
 // Names are PENDING RENAME — implementations are settled, grammar is not.
 
-export const batch = {
+export const batch: {
+  destructureMustExist(object: any, mappingDefinition: Record<string, string>, options?: { errorMessage?: string }): Record<string, any>;
+  allMustExist(object: any, pathList: string[], options?: { errorMessage?: string }): Record<string, any>;
+  extractMustExist(object: any, path: string): any;
+} = {
 
   // PENDING RENAME
   // destructureMustExist(obj, { localKey: "source.path" })
