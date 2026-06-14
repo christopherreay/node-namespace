@@ -424,4 +424,3 @@ const namespace = {
 };
 
 module.exports = namespace;
-module.exports.default = namespace;

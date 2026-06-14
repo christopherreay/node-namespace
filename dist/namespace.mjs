@@ -2,12 +2,11 @@ function getDefaultExportFromCjs (x) {
 	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
 }
 
-var core$1 = {exports: {}};
-
+var core$1;
 var hasRequiredCore;
 
 function requireCore () {
-	if (hasRequiredCore) return core$1.exports;
+	if (hasRequiredCore) return core$1;
 	hasRequiredCore = 1;
 
 	// NotFound sentinel — frozen; returned by get() when a path is absent
@@ -433,9 +432,8 @@ function requireCore () {
 	  batch: namespaceBatch,
 	};
 
-	core$1.exports = namespace;
-	core$1.exports.default = namespace;
-	return core$1.exports;
+	core$1 = namespace;
+	return core$1;
 }
 
 var coreExports = requireCore();

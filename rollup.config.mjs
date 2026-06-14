@@ -19,7 +19,7 @@ export default [
     output: {
       file: "dist/namespace.cjs",
       format: "cjs",
-      exports: "named",
+      exports: "default",
     },
   },
   // UMD build for browsers
