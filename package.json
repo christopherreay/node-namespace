@@ -59,6 +59,6 @@
     "rollup": "^4.0.0"
   },
   "dependencies": {
-    "@visualtools001/namespace": "npm:@jsr/visualtools001__namespace@^1.0.0"
+    "@visualtools001/namespace": "npm:@jsr/visualtools001__namespace@^1.0.2"
   }
 }
