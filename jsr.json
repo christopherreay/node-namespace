@@ -1,7 +1,12 @@
 {
   "name": "@visualtools001/namespace",
-  "version": "1.0.0",
-  "exports": "./dist/namespace.mjs",
+  "version": "1.0.1",
+  "exports": {
+    ".": {
+      "import": "./dist/namespace.mjs",
+      "require": "./dist/namespace.cjs"
+    }
+  },
   "publish": {
     "include": [
       "dist/namespace.mjs",
