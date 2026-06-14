@@ -1,0 +1,3 @@
+# Rung 0 — plain JS (the baseline)
+
+Existence is checked by truthiness (`if (!context.config)`), which silently skips re-establishing config if it were ever a falsy value. Optional chaining or manual `&& request.body` guards hide the question "what must exist here" inside nil-propagating expressions — the *absence* of a guard is invisible, so a forgotten check leaves no trace. Every assumption about what the function depends on must be reconstructed by reading the whole body: there is no structural signal distinguishing required fields from optional ones, initialization from re-use, or client faults from server faults. The tangle is the baseline; every rung above removes one kind of hidden assumption.

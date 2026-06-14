@@ -1,0 +1,15 @@
+{
+  "name": "@visualtools001/namespace",
+  "version": "1.0.0",
+  "exports": "./dist/namespace.mjs",
+  "publish": {
+    "include": [
+      "dist/namespace.mjs",
+      "dist/namespace.cjs",
+      "dist/namespace.umd.js",
+      "src/core.js",
+      "README.md",
+      "LICENSE"
+    ]
+  }
+}

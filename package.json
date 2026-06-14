@@ -1,7 +1,7 @@
 {
-  "name": "@namespace-js/core",
+  "name": "@visualtools001/namespace",
   "version": "1.0.0",
-  "description": "Zero-dependency dotted-path namespace utilities for JavaScript — auto-vivification, NotFound sentinel, and safe defaults",
+  "description": "Dotted-path namespace utilities for JavaScript — 8-verb point-contract API, path algebra, and batch contracts",
   "main": "dist/namespace.cjs",
   "module": "dist/namespace.mjs",
   "browser": "dist/namespace.umd.js",
@@ -29,7 +29,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c rollup.config.mjs",
     "test": "node --test test/*.test.js",
     "prepublishOnly": "npm run build && npm test"
   },
@@ -55,6 +55,7 @@
   },
   "homepage": "https://github.com/christopherreay/node-namespace#readme",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.3",
     "rollup": "^4.0.0"
   }
 }

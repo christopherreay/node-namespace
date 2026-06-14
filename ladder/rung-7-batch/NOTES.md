@@ -1,0 +1,3 @@
+# Rung 7 — batch contracts
+
+Pain removed: a block of individually-named `getMustExist` calls collapses into one batch call with a declaration map. The map IS the preamble contract — it states, in one object literal, every path this handler consumes and the local variable it binds to. Adding a new dependency is one line in the map. Removing one is one deletion. The structure matches the mental model: "I need these things from context." The batch call is marked `// PENDING RENAME` because the function name `destructureMustExist` is a working name pending the final naming decision for the batch contract group.

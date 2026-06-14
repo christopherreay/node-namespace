@@ -1,0 +1,3 @@
+# Rung 6 — split into coordinating modules
+
+Pain removed: logic is now distributed across modules that each own a subtree. The verb-mix of each module signals its role: `configModule` and `userModule` use `setOrDefault` (originators — they establish); `entryModule` uses only `getMustExist` through `getConfig`/`getUserEntries` (consumer — it reads what must already be there). A new developer can read the verb pattern and immediately understand data flow without reading implementation details. The handler becomes a thin coordinator: it validates inputs, calls originators in order, then calls the consumer. Each module's namespace constant is the sole owner of its address space.

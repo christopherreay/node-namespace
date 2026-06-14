@@ -1,0 +1,3 @@
+# Rung 1 — move state into the tree; basic verbs
+
+Pain removed: truthiness existence checks (`if (!context.config)`) are replaced by `setOrDefault` — correct for `0`, `false`, and `null`, not just truthy values. Manual `&& request.body` optional chaining is replaced by `get` + `isNotFound` — absence is now explicit and carries an unmet obligation visible on the variable name (`_probed`). `if (!obj) obj = {}` is replaced by `setOrDefault` — convergence is named and its return value (the settled node) is available immediately. Each verb now states its existence claim on the line where that claim is made.

@@ -1,0 +1,3 @@
+# Rung 5 — build-forward response + position-as-fault
+
+Pain removed: the dual try/catch structure (one for 400 validation errors, one for 500 save errors) is collapsed into one outer catch. The `statusCode` is set to 400 at the start, advanced to 500 before the save step, and advanced to 200 on success — its value at catch time is always the correct fault code for the point at which execution failed. There is no re-tagging or error-type inspection; position in the code IS the fault classification. A reader can determine which fault class any thrown error belongs to by seeing which `statusCode = N` assignment control last passed.

@@ -2,334 +2,447 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-/**
- * namespace-core.js
- * Universal namespace utilities for JavaScript
- * Works in Node.js and browsers
- */
-
-// NotFound sentinel — frozen object for "not found" semantics
-const NotFound = Object.freeze({ namespaceFunctionConstant: "NotFound" });
-
-// Utility functions
-function isObject(item) {
-  return item !== null && typeof item === "object";
+function getDefaultExportFromCjs (x) {
+	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
 }
 
-function isObjectNotArray(item) {
-  return isObject(item) && !Array.isArray(item);
+var core$1 = {exports: {}};
+
+var hasRequiredCore;
+
+function requireCore () {
+	if (hasRequiredCore) return core$1.exports;
+	hasRequiredCore = 1;
+
+	// NotFound sentinel — frozen; returned by get() when a path is absent
+	const NotFound = Object.freeze({ namespaceFunctionConstant: "NotFound" });
+
+	// ── internal helpers ──────────────────────────────────────────────────────────
+
+	function isObject(value) {
+	  return value !== null && typeof value === "object";
+	}
+
+	function isString(value) {
+	  return typeof value === "string";
+	}
+
+	// traverse(traversalContext) — walk a dotted path, calling traversalContext.func
+	// at every segment.
+	//
+	// traversalContext must supply:
+	//   .object   — the root object to traverse
+	//   .address  — dotted path string, or null to return root
+	//   .func(pathStep) — called at each segment; pathStep IS traversalContext
+	//
+	// pathStep (same object, named for its role inside func) exposes:
+	//   .current               — the object at the current depth
+	//   .next                  — value at this segment (undefined if absent)
+	//   .keyExists             — hasOwnProperty result for this segment
+	//   .addressComponent      — the segment string ("users", "alice", …)
+	//   .finalAddressComponent — true when this is the last segment
+	//   .index                 — zero-based segment index
+	//   .addressListLength     — total segment count
+	//
+	// func may write:
+	//   .returnNow = true   — stop traversal
+	//   .toReturn  = value  — value to return from traverse()
+	//
+	// traverse() returns traversalContext.toReturn when returnNow is set.
+	function traverse(traversalContext) {
+	  const rootObject     = traversalContext.object;
+	  const dottedAddress  = traversalContext.address;
+
+	  if (rootObject === undefined || rootObject === null || !isObject(rootObject)) {
+	    throw new Error("namespace: object is not a valid root");
+	  }
+
+	  if (dottedAddress === null) {
+	    traversalContext.toReturn = rootObject;
+	    return;
+	  }
+
+	  if (!isString(dottedAddress)) {
+	    throw new Error("namespace: address must be a string: " + dottedAddress);
+	  }
+
+	  const addressSegments        = dottedAddress.split(".");
+	  traversalContext.addressList        = addressSegments;
+	  traversalContext.addressListLength  = addressSegments.length;
+	  traversalContext.returnNow          = false;
+	  delete traversalContext.toReturn;
+	  traversalContext.current = rootObject;
+
+	  for (let segmentIndex = 0; segmentIndex < addressSegments.length; segmentIndex++) {
+	    traversalContext.index                = segmentIndex;
+	    traversalContext.addressComponent     = addressSegments[segmentIndex];
+	    traversalContext.finalAddressComponent = (segmentIndex >= addressSegments.length - 1);
+
+	    try {
+	      traversalContext.keyExists = Object.prototype.hasOwnProperty.call(
+	        traversalContext.current, traversalContext.addressComponent
+	      );
+	      traversalContext.next = traversalContext.current[traversalContext.addressComponent];
+	    } catch (_ignored) {
+	      traversalContext.keyExists = false;
+	      traversalContext.next      = undefined;
+	    }
+
+	    // pathStep and traversalContext are the same object;
+	    // "pathStep" names its role as seen from inside func
+	    traversalContext.func(traversalContext);
+
+	    if (traversalContext.returnNow === true) return traversalContext.toReturn;
+	    traversalContext.current = traversalContext.next;
+	  }
+	}
+
+	// ── read verbs ────────────────────────────────────────────────────────────────
+
+	// get(object, path)
+	// Returns the value at path, or the NotFound sentinel if any segment is absent.
+	// Never writes.
+	function get(object, path) {
+	  const traversalContext = {
+	    object,
+	    address: path,
+	    func(pathStep) {
+	      if (!pathStep.keyExists) {
+	        pathStep.returnNow = true;
+	        pathStep.toReturn  = NotFound;
+	      } else if (pathStep.finalAddressComponent) {
+	        pathStep.returnNow = true;
+	        pathStep.toReturn  = pathStep.next;
+	      }
+	      // else: key present, not final — continue traversal
+	    }
+	  };
+	  traverse(traversalContext);
+	  return traversalContext.toReturn;
+	}
+
+	// getMustExist(object, path, opts?)
+	// Returns the value, or throws (opts.errorMessage if given).
+	// Never writes.
+	function getMustExist(object, path, options) {
+	  const foundValue_probed = get(object, path);
+	  if (foundValue_probed === NotFound) {
+	    const errorMessage =
+	      (options && options.errorMessage) ||
+	      `namespace.getMustExist: property not found at "${path}"`;
+	    throw new Error(errorMessage);
+	  }
+	  return foundValue_probed;
+	}
+
+	// getMustEmpty(object, path)
+	// Throws if a value is present at path.  Returns nothing useful.
+	// Use as a guard on its own line before writing to a slot you know is new.
+	function getMustEmpty(object, path) {
+	  const foundValue_probed = get(object, path);
+	  if (foundValue_probed !== NotFound) {
+	    throw new Error(`namespace.getMustEmpty: path must be empty but value found at "${path}"`);
+	  }
+	}
+
+	// getOrDefault(object, path, standIn)
+	// Returns the stored value, or standIn if absent.  standIn is a required
+	// positional argument — if you want the sentinel, use get().  Never writes.
+	function getOrDefault(object, path, standIn) {
+	  const foundValue_probed = get(object, path);
+	  return foundValue_probed === NotFound ? standIn : foundValue_probed;
+	}
+
+	// ── write verbs ───────────────────────────────────────────────────────────────
+
+	// set(object, path, value)
+	// Create-only: writes value, throws if path already holds something.
+	// Auto-vivifies missing intermediate objects.
+	function set(object, path, valueToSet) {
+	  if (path === null) throw new Error("namespace.set: path cannot be null");
+
+	  const traversalContext = {
+	    object,
+	    address:    path,
+	    valueToSet,
+	    func(pathStep) {
+	      if (!pathStep.finalAddressComponent) {
+	        if (!pathStep.keyExists) {
+	          // Auto-vivify missing intermediate
+	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+	        } else if (!isObject(pathStep.next)) {
+	          throw new Error(
+	            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
+	          );
+	        }
+	      } else {
+	        if (pathStep.keyExists) {
+	          throw new Error(`namespace.set: cannot overwrite existing value at "${path}"`);
+	        }
+	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
+	        pathStep.returnNow = true;
+	        pathStep.toReturn  = pathStep.valueToSet;
+	      }
+	    }
+	  };
+	  traverse(traversalContext);
+	  return traversalContext.toReturn;
+	}
+
+	// setMustExist(object, path, value)
+	// Update-only: writes value, throws if path is absent.
+	// Does NOT auto-vivify — the whole hierarchy must already exist.
+	function setMustExist(object, path, valueToSet) {
+	  if (path === null) throw new Error("namespace.setMustExist: path cannot be null");
+
+	  const traversalContext = {
+	    object,
+	    address:    path,
+	    valueToSet,
+	    func(pathStep) {
+	      if (!pathStep.finalAddressComponent) {
+	        if (!pathStep.keyExists || !isObject(pathStep.next)) {
+	          throw new Error(`namespace.setMustExist: path does not exist: "${path}"`);
+	        }
+	      } else {
+	        if (!pathStep.keyExists) {
+	          throw new Error(`namespace.setMustExist: path must exist but is absent: "${path}"`);
+	        }
+	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
+	        pathStep.returnNow = true;
+	        pathStep.toReturn  = pathStep.valueToSet;
+	      }
+	    }
+	  };
+	  traverse(traversalContext);
+	  return traversalContext.toReturn;
+	}
+
+	// setOrDefault(object, path, value)
+	// Convergence: writes value only if path is absent; returns whichever now holds.
+	// Auto-vivifies missing intermediate objects.
+	// "Many routes converge here; set it if no route has, else keep."
+	function setOrDefault(object, path, valueToSet) {
+	  if (path === null) throw new Error("namespace.setOrDefault: path cannot be null");
+
+	  const traversalContext = {
+	    object,
+	    address:    path,
+	    valueToSet,
+	    func(pathStep) {
+	      if (!pathStep.finalAddressComponent) {
+	        if (!pathStep.keyExists) {
+	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+	        } else if (!isObject(pathStep.next)) {
+	          throw new Error(
+	            `namespace.setOrDefault: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
+	          );
+	        }
+	      } else {
+	        if (pathStep.keyExists) {
+	          // Already present — return what is there
+	          pathStep.returnNow = true;
+	          pathStep.toReturn  = pathStep.next;
+	        } else {
+	          // Absent — write the default
+	          pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
+	          pathStep.returnNow = true;
+	          pathStep.toReturn  = pathStep.valueToSet;
+	        }
+	      }
+	    }
+	  };
+	  traverse(traversalContext);
+	  return traversalContext.toReturn;
+	}
+
+	// setOverwrite(object, path, value)
+	// Writes unconditionally, clobbering any existing value.
+	// Auto-vivifies missing intermediate objects.
+	// The long name is the signal: you mean to clobber.
+	function setOverwrite(object, path, valueToSet) {
+	  if (path === null) throw new Error("namespace.setOverwrite: path cannot be null");
+
+	  const traversalContext = {
+	    object,
+	    address:    path,
+	    valueToSet,
+	    func(pathStep) {
+	      if (!pathStep.finalAddressComponent) {
+	        if (!pathStep.keyExists || !isObject(pathStep.next)) {
+	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+	        }
+	      } else {
+	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
+	        pathStep.returnNow = true;
+	        pathStep.toReturn  = pathStep.valueToSet;
+	      }
+	    }
+	  };
+	  traverse(traversalContext);
+	  return traversalContext.toReturn;
+	}
+
+	// ── test verbs ────────────────────────────────────────────────────────────────
+
+	// exists(object, path)
+	// Returns true iff the path holds something — including 0, false, "", null.
+	function exists(object, path) {
+	  return get(object, path) !== NotFound;
+	}
+
+	// isNotFound(value)
+	// Returns true iff value is the NotFound sentinel returned by get().
+	function isNotFound(value) {
+	  return (
+	    isObject(value) &&
+	    !Array.isArray(value) &&
+	    value.namespaceFunctionConstant === "NotFound"
+	  );
+	}
+
+	// ── namespace.path ────────────────────────────────────────────────────────────
+	//
+	// Pure path-string algebra — no tree argument.
+	// Every function here takes strings (or arrays of strings) and returns strings.
+
+	const namespacePath = {
+
+	  // join("users", userId, "entries")  →  "users.alice.entries"
+	  // join("a.b", ["c", "d"])           →  "a.b.c.d"
+	  // Each part is split on "." before joining, so partial paths compose cleanly.
+	  join(...parts) {
+	    const segments_list = [];
+	    for (const part of parts) {
+	      if (Array.isArray(part))  segments_list.push(...part);
+	      else if (isString(part))  segments_list.push(...part.split("."));
+	    }
+	    return segments_list.join(".");
+	  },
+
+	  // Same as join but uses "/" — for URL-style paths.
+	  joinSlash(...parts) {
+	    const segments_list = [];
+	    for (const part of parts) {
+	      if (Array.isArray(part))  segments_list.push(...part);
+	      else if (isString(part))  segments_list.push(...part.split("/"));
+	    }
+	    return segments_list.join("/");
+	  },
+
+	  // split("a.b.c")  →  ["a", "b", "c"]
+	  split(dottedPath_namespace) {
+	    if (!isString(dottedPath_namespace)) {
+	      throw new Error("namespace.path.split: path must be a string");
+	    }
+	    return dottedPath_namespace.split(".");
+	  },
+
+	  // isRootOf("users.alice", "users.alice.entries")  →  true
+	  // isRootOf("users.alice", "users.alice")           →  true  (exact match)
+	  // isRootOf("users.alice", "users.alicex")          →  false (not a segment boundary)
+	  isRootOf(rootPath_namespace, targetPath_namespace) {
+	    if (!isString(rootPath_namespace) || !isString(targetPath_namespace)) return false;
+	    if (rootPath_namespace === targetPath_namespace) return true;
+	    return targetPath_namespace.startsWith(rootPath_namespace + ".");
+	  },
+
+	  // tween("a.b.c")           →  "a.children.b.children.c"
+	  // tween("a.b.c", "items")  →  "a.items.b.items.c"
+	  // Single-segment paths pass through unchanged.
+	  tween(dottedPath_namespace, tweenSegment) {
+	    if (!isString(dottedPath_namespace)) return undefined;
+	    const separator_value = isString(tweenSegment) ? tweenSegment : "children";
+	    return dottedPath_namespace.split(".").join("." + separator_value + ".");
+	  },
+
+	};
+
+	// ── namespace.batch ───────────────────────────────────────────────────────────
+	//
+	// Operations that apply a point contract across multiple paths in one call.
+	// Names are PENDING RENAME — implementations are settled, grammar is not.
+
+	const namespaceBatch = {
+
+	  // PENDING RENAME
+	  // destructureMustExist(obj, { localKey: "source.path" })
+	  // Returns { localKey: value } for each entry — throws if any path is absent.
+	  // The mapping object IS the preamble contract: every dependency declared once.
+	  destructureMustExist(object, mappingDefinition, options) {
+	    const result_node = {};
+	    for (const [localKey, sourcePath_namespace] of Object.entries(mappingDefinition)) {
+	      result_node[localKey] = getMustExist(object, sourcePath_namespace, options);
+	    }
+	    return result_node;
+	  },
+
+	  // PENDING RENAME
+	  // allMustExist(obj, ["a.b", "c.d"])
+	  // Returns { "a.b": value1, "c.d": value2 } — throws if any path is absent.
+	  // Keys in the result are the dotted paths themselves.
+	  allMustExist(object, pathList_namespace, options) {
+	    const result_node = {};
+	    for (const path_namespace of pathList_namespace) {
+	      result_node[path_namespace] = getMustExist(object, path_namespace, options);
+	    }
+	    return result_node;
+	  },
+
+	  // PENDING RENAME
+	  // extractMustExist(obj, "a.b")
+	  // Asserts the path exists, removes it from the tree, returns the value.
+	  // Use when consuming a message or one-time token from a shared tree.
+	  extractMustExist(object, path_namespace) {
+	    const segments_list        = path_namespace.split(".");
+	    const leafKey              = segments_list[segments_list.length - 1];
+	    const foundValue           = getMustExist(object, path_namespace);
+
+	    if (segments_list.length === 1) {
+	      delete object[leafKey];
+	    } else {
+	      const parentPath_namespace = segments_list.slice(0, -1).join(".");
+	      const parent_probed        = get(object, parentPath_namespace);
+	      if (parent_probed !== NotFound && isObject(parent_probed)) {
+	        delete parent_probed[leafKey];
+	      }
+	    }
+	    return foundValue;
+	  },
+
+	};
+
+	// ── export ────────────────────────────────────────────────────────────────────
+
+	const namespace = {
+	  NotFound,
+	  // read
+	  get,
+	  getMustExist,
+	  getMustEmpty,
+	  getOrDefault,
+	  // write
+	  set,
+	  setMustExist,
+	  setOrDefault,
+	  setOverwrite,
+	  // test
+	  exists,
+	  isNotFound,
+	  // engine (not user-facing, but available for advanced tooling)
+	  traverse,
+
+	  // sub-namespaces
+	  path:  namespacePath,
+	  batch: namespaceBatch,
+	};
+
+	core$1.exports = namespace;
+	core$1.exports.default = namespace;
+	return core$1.exports;
 }
 
-function isString(item) {
-  return typeof item === "string";
-}
+var coreExports = requireCore();
+var core = /*@__PURE__*/getDefaultExportFromCjs(coreExports);
 
-function isFunction(item) {
-  return typeof item === "function";
-}
-
-// Core namespace function — get or create with auto-vivification
-function namespace(object, address, defaultList, checkExists) {
-  if (object === undefined || object === null || !isObject(object)) {
-    throw new Error("namespace: object is not a valid namespace root");
-  }
-
-  if (address === null) return object;
-  if (address === undefined || !isString(address)) {
-    throw new Error("namespace: address is not a valid string: " + address);
-  }
-
-  if (checkExists == null) checkExists = false;
-
-  let current = object;
-  let last = null;
-  const addressList = address.split(".");
-  const addressListTestIndex = addressList.length - 1;
-  let addressCounter = 0;
-
-  // Default: fill with empty objects
-  if (defaultList == null) defaultList = ["{}"];
-  const defaultListTestIndex = defaultList.length - 1;
-  let defaultCounter = 0;
-
-  // Handle nonLeafNodes and leafNode prefixes
-  let nonLeafNodes;
-  let leafObject;
-  if (defaultList[0].startsWith("nonLeafNodes:")) {
-    nonLeafNodes = defaultList[0].replace(/nonLeafNodes:/, "");
-  } else if (defaultList[0].startsWith("leafNode:")) {
-    defaultList[0] = defaultList[0].replace(/leafNode:/, "");
-    if (defaultList[0].length === 0) {
-      defaultList[0] = "null";
-      leafObject = checkExists;
-      checkExists = false;
-    }
-    nonLeafNodes = "{}";
-  }
-
-  let wayPoint;
-  for (wayPoint of addressList) {
-    if (!current.hasOwnProperty(wayPoint)) {
-      if (checkExists !== false) return NotFound;
-
-      let toReturn;
-      let toEval;
-      if (addressCounter < addressListTestIndex && nonLeafNodes != null) {
-        toEval = nonLeafNodes;
-      } else {
-        toEval = defaultList[defaultCounter];
-      }
-
-      // Safe evaluation for object creation
-      if (toEval === "{}") {
-        toReturn = {};
-      } else if (toEval === "[]") {
-        toReturn = [];
-      } else if (toEval === "new Map()") {
-        toReturn = new Map();
-      } else if (toEval === "new Set()") {
-        toReturn = new Set();
-      } else if (toEval === "null") {
-        toReturn = null;
-      } else {
-        // Fallback: try to evaluate safely
-        try {
-          toReturn = eval("(" + toEval + ")");
-        } catch (e) {
-          toReturn = {};
-        }
-      }
-
-      current[wayPoint] = toReturn;
-    }
-    last = current;
-    current = current[wayPoint];
-    addressCounter++;
-    if (defaultCounter < defaultListTestIndex) {
-      defaultCounter++;
-    }
-  }
-
-  if (leafObject != null && current == null) {
-    current = last[wayPoint] = leafObject;
-  }
-
-  if (checkExists === "delete") delete last[wayPoint];
-  return current;
-}
-
-namespace.NotFound = NotFound;
-
-namespace.isNotFound = function(value, address) {
-  if (address !== undefined) {
-    value = namespace.getIfExists(value, address);
-  }
-  return isObjectNotArray(value) && value.namespaceFunctionConstant === "NotFound";
-};
-
-// TraversalContext-based traversal
-namespace.traverse = function(ctx) {
-  const { object, address } = ctx;
-
-  if (object === undefined || object === null || !isObject(object)) {
-    throw new Error("namespace.traverse: object is not a valid namespace root");
-  }
-
-  if (address === null) {
-    ctx.toReturn = object;
-    return;
-  }
-  if (address === undefined || (!isString(address) && isNaN(address))) {
-    throw new Error("namespace.traverse: address is not valid: " + address);
-  }
-
-  const addr = isNaN(address) ? address : address.toString();
-
-  if (ctx.debugging === true) {
-    debugger;
-  }
-
-  ctx.addressList = addr.split(".");
-  ctx.returnNow = false;
-  delete ctx.toReturn;
-  ctx.current = ctx.object;
-  ctx.addressListLength = ctx.addressList.length;
-  ctx.index = -1;
-
-  for (ctx.addressComponent of ctx.addressList) {
-    ctx.index++;
-    try {
-      ctx.keyExists = ctx.addressComponent in ctx.current;
-      ctx.next = ctx.current[ctx.addressComponent];
-    } catch (error) {
-      ctx.keyExists = false;
-      ctx.next = undefined;
-    }
-    ctx.finalAddressComponent = ctx.index >= ctx.addressListLength - 1;
-    
-    if (isFunction(ctx.func)) {
-      ctx.func(ctx);
-    }
-    
-    if (ctx.returnNow === true) return ctx.toReturn;
-    ctx.current = ctx.next;
-  }
-
-  // Loop completed without returning - this is OK for traversal without return value
-};
-
-namespace.getIfExists = function(object, address, options) {
-  if (options === undefined || options === null) options = {};
-
-  const ctx = {
-    object,
-    address,
-    debugging: options.debugging,
-    defaultValueToReturn: options.defaultValueToReturn,
-    func: (t) => {
-      if (!t.keyExists || t.next === NotFound) {
-        t.returnNow = true;
-        t.toReturn = t.defaultValueToReturn !== undefined ? t.defaultValueToReturn : NotFound;
-      } else if (t.finalAddressComponent === true) {
-        t.returnNow = true;
-        t.toReturn = t.next;
-      }
-    }
-  };
-
-  namespace.traverse(ctx);
-  return ctx.toReturn;
-};
-
-namespace.getMustExist = function(object, address, options) {
-  if (options === undefined || options === null) options = {};
-
-  const result = namespace.getIfExists(object, address);
-  if (result === NotFound) {
-    const errorMessage = options.errorMessage || `Property not found: "${address}"`;
-    throw new Error(errorMessage);
-  }
-  return result;
-};
-
-namespace.exists = function(object, address) {
-  return !namespace.isNotFound(namespace.getIfExists(object, address));
-};
-
-namespace.setValue = function(object, address, value, options) {
-  if (options === undefined || options === null) options = {};
-
-  if (address === null) {
-    throw new Error("namespace.setValue: address cannot be null");
-  }
-
-  const ctx = Object.assign(options, {
-    object,
-    address,
-    setValue: value,
-    overwrite: options.overwrite === true,
-    dryRun: options.dryRun === true,
-    ignoreErrors: options.ignoreErrors === true,
-    debugging: options.debugging,
-    hardWriteHierarchy: options.hardWriteHierarchy === true,
-    func: (t) => {
-      if (t.debugging === true) debugger;
-
-      if (!t.finalAddressComponent) {
-        // Intermediate path component
-        if (t.next === undefined) {
-          if (t.dryRun === true) {
-            t.returnNow = true;
-          } else {
-            t.next = t.current[t.addressComponent] = {};
-          }
-        } else if (!isObject(t.next)) {
-          if (t.ignoreErrors === true) {
-            t.returnNow = true;
-            t.toReturn = undefined;
-          } else if (t.hardWriteHierarchy === true) {
-            t.next = t.current[t.addressComponent] = {};
-          } else {
-            throw new Error(`namespace.setValue: no valid object hierarchy to "${t.address}"`);
-          }
-        }
-      } else {
-        // Final path component
-        if (t.overwrite !== true && t.ignoreErrors !== true && t.next !== undefined) {
-          throw new Error(`namespace.setValue: cannot overwrite existing value at "${t.address}"`);
-        } else if (t.dryRun || (t.overwrite === false && t.ignoreErrors === true && t.next !== undefined)) {
-          t.returnNow = true;
-        } else {
-          t.current[t.addressComponent] = t.setValue;
-          t.returnNow = true;
-          t.toReturn = t.setValue;
-        }
-      }
-    }
-  });
-
-  return namespace.traverse(ctx);
-};
-
-namespace.remove = function(object, address) {
-  return namespace(object, address, null, "delete");
-};
-
-namespace.leafNode = function(object, address, leafValue) {
-  const ctx = { overwrite: false };
-  try {
-    return namespace.setValue(object, address, leafValue, ctx);
-  } catch (error) {
-    if (error.message && error.message.includes("cannot overwrite existing value")) {
-      return ctx.next;
-    }
-    throw error;
-  }
-};
-
-namespace.join = function(...parts) {
-  const fullAddressList = [];
-  for (const item of parts) {
-    if (Array.isArray(item)) {
-      fullAddressList.push(...item);
-    } else if (isString(item)) {
-      fullAddressList.push(...item.split("."));
-    }
-  }
-  return fullAddressList.join(".");
-};
-
-namespace.flatten = function(objectToFlatten, currentNamespace, toReturn) {
-  if (toReturn === undefined) toReturn = {};
-
-  if (isObjectNotArray(objectToFlatten)) {
-    for (const [namespaceItem, recurseIntoThisObject] of Object.entries(objectToFlatten)) {
-      const targetNamespace = currentNamespace === undefined 
-        ? namespaceItem 
-        : currentNamespace + "." + namespaceItem;
-      namespace.flatten(recurseIntoThisObject, targetNamespace, toReturn);
-    }
-  } else {
-    if (currentNamespace !== undefined) {
-      toReturn[currentNamespace] = objectToFlatten;
-    }
-  }
-  return toReturn;
-};
-
-namespace.expand = function(flatObject) {
-  const result = {};
-  for (const [path, value] of Object.entries(flatObject)) {
-    namespace.setValue(result, path, value, { overwrite: true });
-  }
-  return result;
-};
-
-// Export for both CommonJS and ESM
-namespace.NotFound = NotFound;
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = namespace;
-}
-
-exports.default = namespace;
+exports.default = core;

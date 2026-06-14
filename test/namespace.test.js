@@ -1,885 +1,648 @@
+"use strict";
+
 /**
- * Comprehensive test suite for namespace
+ * Test suite for namespace 8-verb API
  * Run with: node --test test/namespace.test.js
  */
 
-const { describe, it } = require('node:test');
-const assert = require('node:assert');
+const { describe, it } = require("node:test");
+const assert = require("node:assert/strict");
 
-// Handle both CommonJS and ESM exports
-const namespaceModule = require('../src/core.js');
-const namespace = namespaceModule.default || namespaceModule;
+const namespace = require("../src/core.js");
+const { NotFound } = namespace;
 
-// Ensure NotFound is attached
-if (!namespace.NotFound && namespaceModule.NotFound) {
-  namespace.NotFound = namespaceModule.NotFound;
-}
+// ── NotFound sentinel ─────────────────────────────────────────────────────────
 
-describe('namespace core', () => {
-  describe('namespace() - auto-vivification', () => {
-    it('should auto-vivify nested objects', () => {
-      const obj = {};
-      const result = namespace(obj, 'a.b.c');
-      assert.deepStrictEqual(obj, { a: { b: { c: {} } } });
-      assert.deepStrictEqual(result, {});
-    });
-
-    it('should return existing path without modification', () => {
-      const obj = { a: { b: { c: 'value' } } };
-      const result = namespace(obj, 'a.b.c');
-      assert.strictEqual(result, 'value');
-      assert.deepStrictEqual(obj, { a: { b: { c: 'value' } } });
-    });
-
-    it('should return root when address is null', () => {
-      const obj = { test: true };
-      const result = namespace(obj, null);
-      assert.strictEqual(result, obj);
-    });
-
-    it('should create empty key for empty string address', () => {
-      const obj = {};
-      const result = namespace(obj, '');
-      // Empty string creates a key with empty string
-      assert.strictEqual(obj[''], result);
-    });
-
-    it('should throw on invalid object', () => {
-      assert.throws(() => namespace(null, 'a.b'), /not a valid namespace root/);
-      assert.throws(() => namespace(undefined, 'a.b'), /not a valid namespace root/);
-      assert.throws(() => namespace('string', 'a.b'), /not a valid namespace root/);
-      assert.throws(() => namespace(123, 'a.b'), /not a valid namespace root/);
-    });
-
-    it('should throw on invalid address', () => {
-      assert.throws(() => namespace({}, undefined), /not a valid string/);
-      assert.throws(() => namespace({}, 123), /not a valid string/);
-      assert.throws(() => namespace({}, {}), /not a valid string/);
-    });
-
-    it('should handle single-level paths', () => {
-      const obj = {};
-      namespace(obj, 'key');
-      assert.deepStrictEqual(obj, { key: {} });
-    });
-
-    it('should handle deeply nested paths', () => {
-      const obj = {};
-      namespace(obj, 'a.b.c.d.e.f');
-      assert.deepStrictEqual(obj, { a: { b: { c: { d: { e: { f: {} } } } } } });
-    });
-
-    it('should extend existing partial paths', () => {
-      const obj = { a: { existing: true } };
-      namespace(obj, 'a.b.c');
-      assert.deepStrictEqual(obj, { a: { existing: true, b: { c: {} } } });
-    });
+describe("NotFound sentinel", () => {
+  it("is a frozen object", () => {
+    assert.ok(Object.isFrozen(NotFound));
+    assert.equal(NotFound.namespaceFunctionConstant, "NotFound");
   });
 
-  describe('NotFound sentinel', () => {
-    it('should have frozen NotFound sentinel', () => {
-      assert.strictEqual(namespace.NotFound.namespaceFunctionConstant, 'NotFound');
-      assert.strictEqual(Object.isFrozen(namespace.NotFound), true);
-      // In non-strict mode, writes to frozen objects fail silently.
-      namespace.NotFound.test = true;
-      assert.strictEqual(namespace.NotFound.test, undefined);
-    });
-
-    it('should return NotFound for non-existent path with checkExists=true', () => {
-      const obj = {};
-      const result = namespace(obj, 'a.b.c', null, true);
-      assert.strictEqual(result, namespace.NotFound);
-    });
-
-    it('should detect NotFound with isNotFound()', () => {
-      assert.strictEqual(namespace.isNotFound(namespace.NotFound), true);
-      assert.strictEqual(namespace.isNotFound({}), false);
-      assert.strictEqual(namespace.isNotFound(null), false);
-      assert.strictEqual(namespace.isNotFound(undefined), false);
-      assert.strictEqual(namespace.isNotFound('string'), false);
-      assert.strictEqual(namespace.isNotFound(0), false);
-      assert.strictEqual(namespace.isNotFound(false), false);
-    });
-
-    it('should detect NotFound at path with isNotFound(value, address)', () => {
-      const obj = { a: {} };
-      assert.strictEqual(namespace.isNotFound(obj, 'a.b'), true);
-      const obj2 = { a: { b: 'exists' } };
-      assert.strictEqual(namespace.isNotFound(obj2, 'a.b'), false);
-    });
-  });
-
-  describe('getIfExists()', () => {
-    it('should return value if exists', () => {
-      const obj = { a: { b: 'value' } };
-      assert.strictEqual(namespace.getIfExists(obj, 'a.b'), 'value');
-    });
-
-    it('should return NotFound if not exists', () => {
-      const obj = {};
-      assert.strictEqual(namespace.getIfExists(obj, 'a.b'), namespace.NotFound);
-    });
-
-    it('should return NotFound for null intermediate', () => {
-      const obj = { a: null };
-      assert.strictEqual(namespace.getIfExists(obj, 'a.b'), namespace.NotFound);
-    });
-
-    it('should support defaultValueToReturn option', () => {
-      const obj = {};
-      assert.strictEqual(
-        namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: 'default' }),
-        'default'
-      );
-    });
-
-    it('should return defaultValueToReturn of 0 (falsy value)', () => {
-      const obj = {};
-      assert.strictEqual(
-        namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: 0 }),
-        0
-      );
-    });
-
-    it('should return defaultValueToReturn of false', () => {
-      const obj = {};
-      assert.strictEqual(
-        namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: false }),
-        false
-      );
-    });
-
-    it('should return defaultValueToReturn of empty string', () => {
-      const obj = {};
-      assert.strictEqual(
-        namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: '' }),
-        ''
-      );
-    });
-
-    it('should return defaultValueToReturn of null', () => {
-      const obj = {};
-      assert.strictEqual(
-        namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: null }),
-        null
-      );
-    });
-
-    it('should distinguish undefined from NotFound', () => {
-      const obj = { a: { b: undefined } };
-      const result = namespace.getIfExists(obj, 'a.b');
-      assert.strictEqual(result, undefined);
-      assert.strictEqual(namespace.isNotFound(result), false);
-    });
-  });
-
-  describe('getMustExist()', () => {
-    it('should return value if exists', () => {
-      const obj = { a: { b: 'value' } };
-      assert.strictEqual(namespace.getMustExist(obj, 'a.b'), 'value');
-    });
-
-    it('should throw if not exists', () => {
-      const obj = {};
-      assert.throws(() => namespace.getMustExist(obj, 'a.b'), /Property not found/);
-    });
-
-    it('should support custom error message', () => {
-      const obj = {};
-      assert.throws(
-        () => namespace.getMustExist(obj, 'a.b', { errorMessage: 'Custom error message' }),
-        /Custom error message/
-      );
-    });
-
-    it('should include address in default error', () => {
-      const obj = {};
-      assert.throws(
-        () => namespace.getMustExist(obj, 'config.database.url'),
-        /config.database.url/
-      );
-    });
-  });
-
-  describe('exists()', () => {
-    it('should return true for existing path', () => {
-      const obj = { a: { b: 'value' } };
-      assert.strictEqual(namespace.exists(obj, 'a.b'), true);
-    });
-
-    it('should return false for non-existing path', () => {
-      const obj = {};
-      assert.strictEqual(namespace.exists(obj, 'a.b'), false);
-    });
-
-    it('should return true for undefined value (exists but undefined)', () => {
-      const obj = { a: { b: undefined } };
-      assert.strictEqual(namespace.exists(obj, 'a.b'), true);
-    });
-
-    it('should return true for null value', () => {
-      const obj = { a: { b: null } };
-      assert.strictEqual(namespace.exists(obj, 'a.b'), true);
-    });
-
-    it('should return false when intermediate is null', () => {
-      const obj = { a: null };
-      assert.strictEqual(namespace.exists(obj, 'a.b'), false);
-    });
-  });
-
-  describe('setValue() - safety by default', () => {
-    it('should set value at path', () => {
-      const obj = {};
-      const result = namespace.setValue(obj, 'a.b.c', 'value');
-      assert.strictEqual(obj.a.b.c, 'value');
-      assert.strictEqual(result, 'value');
-    });
-
-    it('should return the set value', () => {
-      const obj = {};
-      const result = namespace.setValue(obj, 'key', { nested: true });
-      assert.deepStrictEqual(result, { nested: true });
-    });
-
-    it('should refuse to overwrite by default', () => {
-      const obj = { a: 'exists' };
-      assert.throws(() => namespace.setValue(obj, 'a', 'new'), /cannot overwrite/);
-    });
-
-    it('should allow overwrite with option', () => {
-      const obj = { a: 'old' };
-      namespace.setValue(obj, 'a', 'new', { overwrite: true });
-      assert.strictEqual(obj.a, 'new');
-    });
-
-    it('should support dryRun option', () => {
-      const obj = {};
-      namespace.setValue(obj, 'a.b', 'value', { dryRun: true });
-      assert.deepStrictEqual(obj, {});
-    });
-
-    it('should support ignoreErrors option for existing values', () => {
-      const obj = { a: 'exists' };
-      const result = namespace.setValue(obj, 'a', 'new', { ignoreErrors: true });
-      assert.strictEqual(obj.a, 'exists'); // unchanged
-      assert.strictEqual(result, undefined);
-    });
-
-    it('should throw for null address', () => {
-      const obj = {};
-      assert.throws(() => namespace.setValue(obj, null, 'value'), /address cannot be null/);
-    });
-
-    it('should auto-vivify intermediate objects', () => {
-      const obj = {};
-      namespace.setValue(obj, 'a.b.c.d', 'deep');
-      assert.deepStrictEqual(obj, { a: { b: { c: { d: 'deep' } } } });
-    });
-
-    it('should fail when intermediate is not an object without hardWriteHierarchy', () => {
-      const obj = { a: 'string' };
-      assert.throws(
-        () => namespace.setValue(obj, 'a.b', 'value'),
-        /no valid object hierarchy/
-      );
-    });
-
-    it('should overwrite intermediate with hardWriteHierarchy', () => {
-      const obj = { a: 'string' };
-      namespace.setValue(obj, 'a.b', 'value', { hardWriteHierarchy: true });
-      assert.deepStrictEqual(obj, { a: { b: 'value' } });
-    });
-
-    it('should handle ignoreErrors for non-object intermediate', () => {
-      const obj = { a: 'string' };
-      const result = namespace.setValue(obj, 'a.b', 'value', { ignoreErrors: true });
-      assert.strictEqual(result, undefined);
-      assert.strictEqual(obj.a, 'string'); // unchanged
-    });
-
-    it('should set various value types', () => {
-      const obj = {};
-      namespace.setValue(obj, 'str', 'string');
-      namespace.setValue(obj, 'num', 42);
-      namespace.setValue(obj, 'bool', true);
-      namespace.setValue(obj, 'nil', null);
-      namespace.setValue(obj, 'undef', undefined);
-      namespace.setValue(obj, 'arr', [1, 2, 3]);
-      namespace.setValue(obj, 'obj', { nested: true });
-      namespace.setValue(obj, 'fn', () => 'test');
-      
-      assert.strictEqual(obj.str, 'string');
-      assert.strictEqual(obj.num, 42);
-      assert.strictEqual(obj.bool, true);
-      assert.strictEqual(obj.nil, null);
-      assert.strictEqual(obj.undef, undefined);
-      assert.deepStrictEqual(obj.arr, [1, 2, 3]);
-      assert.deepStrictEqual(obj.obj, { nested: true });
-      assert.strictEqual(obj.fn(), 'test');
-    });
-  });
-
-  describe('remove()', () => {
-    it('should remove value at path', () => {
-      const obj = { a: { b: 'value' } };
-      namespace.remove(obj, 'a.b');
-      assert.deepStrictEqual(obj.a, {});
-      assert.strictEqual('b' in obj.a, false);
-    });
-
-    it('should remove nested path', () => {
-      const obj = { a: { b: { c: { d: 'deep' } } } };
-      namespace.remove(obj, 'a.b.c');
-      assert.deepStrictEqual(obj.a.b, {});
-    });
-
-    it('should return deleted value', () => {
-      const obj = { a: { b: 'value' } };
-      const result = namespace.remove(obj, 'a.b');
-      assert.strictEqual(result, 'value');
-    });
-
-    it('should return NotFound for non-existent path', () => {
-      const obj = { a: {} };
-      const result = namespace.remove(obj, 'a.b');
-      assert.strictEqual(result, namespace.NotFound);
-    });
-  });
-
-  describe('leafNode() - safe defaults', () => {
-    it('should set value if not exists', () => {
-      const obj = {};
-      const result = namespace.leafNode(obj, 'a.b', 'default');
-      assert.strictEqual(result, 'default');
-      assert.strictEqual(obj.a.b, 'default');
-    });
-
-    it('should return existing value without overwriting', () => {
-      const obj = { a: { b: 'existing' } };
-      const result = namespace.leafNode(obj, 'a.b', 'new');
-      assert.strictEqual(result, 'existing');
-      assert.strictEqual(obj.a.b, 'existing');
-    });
-
-    it('should work with complex default values', () => {
-      const obj = {};
-      const map = new Map();
-      const result = namespace.leafNode(obj, 'cache', map);
-      assert.strictEqual(result, map);
-      assert.strictEqual(obj.cache, map);
-    });
-
-    it('should not overwrite falsy values', () => {
-      const obj = { a: { b: 0 } };
-      const result = namespace.leafNode(obj, 'a.b', 999);
-      assert.strictEqual(result, 0);
-    });
-
-    it('should not overwrite empty string', () => {
-      const obj = { a: { b: '' } };
-      const result = namespace.leafNode(obj, 'a.b', 'default');
-      assert.strictEqual(result, '');
-    });
-
-    it('should not overwrite null', () => {
-      const obj = { a: { b: null } };
-      const result = namespace.leafNode(obj, 'a.b', 'default');
-      assert.strictEqual(result, null);
-    });
-  });
-
-  describe('join()', () => {
-    it('should join strings with dots', () => {
-      assert.strictEqual(namespace.join('a', 'b', 'c'), 'a.b.c');
-    });
-
-    it('should flatten arrays', () => {
-      assert.strictEqual(namespace.join('a', ['b', 'c']), 'a.b.c');
-    });
-
-    it('should handle mixed arrays and strings', () => {
-      assert.strictEqual(namespace.join('a', ['b', 'c'], 'd'), 'a.b.c.d');
-    });
-
-    it('should split strings on dots and rejoin', () => {
-      assert.strictEqual(namespace.join('a.b', 'c.d'), 'a.b.c.d');
-    });
-
-    it('should handle empty parts', () => {
-      assert.strictEqual(namespace.join('a', '', 'b'), 'a..b');
-    });
-
-    it('should handle single part', () => {
-      assert.strictEqual(namespace.join('single'), 'single');
-    });
-
-    it('should handle no parts', () => {
-      assert.strictEqual(namespace.join(), '');
-    });
-  });
-
-  describe('flatten()', () => {
-    it('should flatten nested object', () => {
-      const obj = { a: { b: { c: 'value' } } };
-      assert.deepStrictEqual(namespace.flatten(obj), { 'a.b.c': 'value' });
-    });
-
-    it('should handle arrays as values (not recurse)', () => {
-      const obj = { a: { b: [1, 2, 3] } };
-      assert.deepStrictEqual(namespace.flatten(obj), { 'a.b': [1, 2, 3] });
-    });
-
-    it('should handle multiple branches', () => {
-      const obj = { a: { x: 1 }, b: { y: 2 } };
-      assert.deepStrictEqual(namespace.flatten(obj), { 'a.x': 1, 'b.y': 2 });
-    });
-
-    it('should handle flat object (no nesting)', () => {
-      const obj = { a: 1, b: 2 };
-      assert.deepStrictEqual(namespace.flatten(obj), { a: 1, b: 2 });
-    });
-
-    it('should handle empty object', () => {
-      assert.deepStrictEqual(namespace.flatten({}), {});
-    });
-
-    it('should handle null values', () => {
-      const obj = { a: { b: null } };
-      assert.deepStrictEqual(namespace.flatten(obj), { 'a.b': null });
-    });
-
-    it('should handle deeply nested structure', () => {
-      const obj = { a: { b: { c: { d: { e: 'deep' } } } } };
-      assert.deepStrictEqual(namespace.flatten(obj), { 'a.b.c.d.e': 'deep' });
-    });
-  });
-
-  describe('expand()', () => {
-    it('should expand flat object', () => {
-      const flat = { 'a.b.c': 'value' };
-      assert.deepStrictEqual(namespace.expand(flat), { a: { b: { c: 'value' } } });
-    });
-
-    it('should expand multiple paths', () => {
-      const flat = { 'a.x': 1, 'b.y': 2 };
-      assert.deepStrictEqual(namespace.expand(flat), { a: { x: 1 }, b: { y: 2 } });
-    });
-
-    it('should handle overlapping paths', () => {
-      const flat = { 'a.b': 1, 'a.c': 2 };
-      assert.deepStrictEqual(namespace.expand(flat), { a: { b: 1, c: 2 } });
-    });
-
-    it('should handle empty object', () => {
-      assert.deepStrictEqual(namespace.expand({}), {});
-    });
-
-    it('should expand arrays as values', () => {
-      const flat = { 'a.b': [1, 2, 3] };
-      assert.deepStrictEqual(namespace.expand(flat), { a: { b: [1, 2, 3] } });
-    });
-
-    it('should round-trip with flatten', () => {
-      const original = { a: { b: { c: 'value', d: [1, 2] } }, e: null };
-      const flat = namespace.flatten(original);
-      const expanded = namespace.expand(flat);
-      // Note: expand uses overwrite, so it will reconstruct
-      assert.deepStrictEqual(expanded, original);
-    });
-  });
-
-  describe('traverse() - low-level', () => {
-    it('should traverse and execute func', () => {
-      const obj = { a: { b: { c: 'value' } } };
-      let visited = [];
-      
-      namespace.traverse({
-        object: obj,
-        address: 'a.b.c',
-        func: (t) => {
-          visited.push(t.addressComponent);
-        }
-      });
-      
-      assert.deepStrictEqual(visited, ['a', 'b', 'c']);
-    });
-
-    it('should support early return with returnNow', () => {
-      const obj = { a: { b: { c: 'value' } } };
-      
-      const result = namespace.traverse({
-        object: obj,
-        address: 'a.b.c',
-        func: (t) => {
-          if (t.addressComponent === 'b') {
-            t.returnNow = true;
-            t.toReturn = 'stopped at b';
-          }
-        }
-      });
-      
-      assert.strictEqual(result, 'stopped at b');
-    });
-
-    it('should throw for invalid object', () => {
-      assert.throws(
-        () => namespace.traverse({ object: null, address: 'a' }),
-        /not a valid namespace root/
-      );
-    });
-
-    it('should return root object for null address', () => {
-      const obj = { test: true };
-      const result = namespace.traverse({
-        object: obj,
-        address: null,
-        func: () => {}
-      });
-      // traverse returns nothing for null address (sets ctx.toReturn)
-    });
-  });
-
-  describe('Integration scenarios', () => {
-    it('should handle API validation use case', () => {
-      const req = { body: { config: { server: { port: 3000 } } } };
-      
-      // This would be used in an API endpoint
-      const config = namespace.getMustExist(req.body, 'config', {
-        errorMessage: "API Error: 'config' is required in request body"
-      });
-      
-      const port = namespace.getIfExists(config, 'server.port', {
-        defaultValueToReturn: 8080
-      });
-      
-      assert.strictEqual(port, 3000);
-    });
-
-    it('should handle safe initialization pattern', () => {
-      const app = {};
-      
-      // Multiple modules might try to initialize cache
-      const cache1 = namespace.leafNode(app, 'cache.users', new Map());
-      const cache2 = namespace.leafNode(app, 'cache.users', new Map());
-      
-      // Should be the same object
-      assert.strictEqual(cache1, cache2);
-      assert.strictEqual(app.cache.users, cache1);
-    });
-
-    it('should handle configuration merging', () => {
-      const defaults = { server: { port: 3000, host: 'localhost' } };
-      const userConfig = { server: { port: 8080 } };
-      
-      const config = {};
-      
-      // Set defaults with safety (will fail if exists, so we need overwrite or fresh object)
-      namespace.setValue(config, 'server.port', defaults.server.port, { overwrite: true });
-      namespace.setValue(config, 'server.host', defaults.server.host, { overwrite: true });
-      
-      // Merge user config
-      namespace.setValue(config, 'server.port', userConfig.server.port, { overwrite: true });
-      
-      assert.deepStrictEqual(config, { server: { port: 8080, host: 'localhost' } });
-    });
-
-    it('should handle deep setting with safety', () => {
-      const config = { database: { primary: { url: 'postgres://old' } } };
-      
-      // Try to set without overwrite should fail
-      assert.throws(
-        () => namespace.setValue(config, 'database.primary.url', 'postgres://new'),
-        /cannot overwrite/
-      );
-      
-      // With overwrite it works
-      namespace.setValue(config, 'database.primary.url', 'postgres://new', { overwrite: true });
-      assert.strictEqual(config.database.primary.url, 'postgres://new');
-    });
-
-    it('should handle complex nested structures', () => {
-      const data = {
-        users: {
-          'user-1': { name: 'Alice', settings: { theme: 'dark' } },
-          'user-2': { name: 'Bob', settings: { theme: 'light' } }
-        }
-      };
-      
-      assert.strictEqual(namespace.getIfExists(data, 'users.user-1.name'), 'Alice');
-      assert.strictEqual(namespace.getIfExists(data, 'users.user-2.settings.theme'), 'light');
-      assert.strictEqual(namespace.isNotFound(data, 'users.user-3'), true);
-    });
-
-    it('should work with Symbol-named properties', () => {
-      const sym = Symbol('test');
-      const obj = {};
-      obj[sym] = { nested: 'value' };
-      
-      // Dotted paths only work with string keys
-      // This verifies we don't crash on symbols
-      assert.strictEqual(namespace.getIfExists(obj, 'nonexistent'), namespace.NotFound);
-    });
+  it("isNotFound returns true only for the sentinel", () => {
+    assert.equal(namespace.isNotFound(NotFound), true);
+    assert.equal(namespace.isNotFound({}), false);
+    assert.equal(namespace.isNotFound(null), false);
+    assert.equal(namespace.isNotFound(undefined), false);
+    assert.equal(namespace.isNotFound(0), false);
+    assert.equal(namespace.isNotFound(false), false);
+    assert.equal(namespace.isNotFound(""), false);
+    assert.equal(namespace.isNotFound([]), false);
   });
 });
 
-describe('AI Agent Patterns', () => {
-  it('should handle structured LLM output with fallbacks', () => {
-    // Simulating different LLM output formats
-    const nestedFormat = {
-      intent: { type: 'greeting', confidence: 0.95 },
-      entities: { name: 'Alice' }
-    };
-    
-    const flatFormat = {
-      intent_type: 'greeting',
-      entity_name: 'Alice'
-    };
-    
-    function extractIntent(data) {
-      return namespace.getIfExists(data, 'intent.type', {
-        defaultValueToReturn: namespace.getIfExists(data, 'intent_type')
-      });
-    }
-    
-    function extractName(data) {
-      return namespace.getIfExists(data, 'entities.name', {
-        defaultValueToReturn: namespace.getIfExists(data, 'entity_name')
-      });
-    }
-    
-    assert.strictEqual(extractIntent(nestedFormat), 'greeting');
-    assert.strictEqual(extractIntent(flatFormat), 'greeting');
-    assert.strictEqual(extractName(nestedFormat), 'Alice');
-    assert.strictEqual(extractName(flatFormat), 'Alice');
+// ── get ───────────────────────────────────────────────────────────────────────
+
+describe("get()", () => {
+  it("returns the value at a present path", () => {
+    assert.equal(namespace.get({ a: { b: 42 } }, "a.b"), 42);
   });
 
-  it('should support conversation state management', () => {
-    const session = {};
-    
-    // Turn 1: Learn user's name
-    namespace.setValue(session, 'user.name', 'Alice');
-    assert.strictEqual(namespace.exists(session, 'user.name'), true);
-    
-    // Turn 2: Add preference
-    namespace.setValue(session, 'user.preferences.theme', 'dark');
-    assert.strictEqual(namespace.getIfExists(session, 'user.preferences.theme'), 'dark');
-    
-    // Check for unknown info
-    assert.strictEqual(namespace.exists(session, 'user.age'), false);
-    assert.strictEqual(
-      namespace.getIfExists(session, 'user.age', { defaultValueToReturn: 'unknown' }),
-      'unknown'
+  it("returns NotFound for an absent path", () => {
+    assert.equal(namespace.get({}, "a.b"), NotFound);
+  });
+
+  it("returns NotFound when an intermediate segment is absent", () => {
+    assert.equal(namespace.get({ a: {} }, "a.b.c"), NotFound);
+  });
+
+  it("returns NotFound when an intermediate is null", () => {
+    assert.equal(namespace.get({ a: null }, "a.b"), NotFound);
+  });
+
+  it("returns NotFound when an intermediate is a primitive", () => {
+    assert.equal(namespace.get({ a: 5 }, "a.b"), NotFound);
+  });
+
+  it("returns the value for all falsy stored values (0, false, '', null)", () => {
+    assert.equal(namespace.get({ v: 0    }, "v"), 0);
+    assert.equal(namespace.get({ v: false }, "v"), false);
+    assert.equal(namespace.get({ v: ""   }, "v"), "");
+    assert.equal(namespace.get({ v: null }, "v"), null);
+  });
+
+  it("returns undefined for a stored undefined (key present, value undefined)", () => {
+    const obj = { a: undefined };
+    const result = namespace.get(obj, "a");
+    assert.equal(result, undefined);
+    assert.equal(namespace.isNotFound(result), false);
+  });
+
+  it("never writes to the object", () => {
+    const obj = { a: 1 };
+    namespace.get(obj, "b");
+    assert.deepEqual(obj, { a: 1 });
+  });
+
+  it("throws on a non-object root", () => {
+    assert.throws(() => namespace.get(null, "a"), /namespace/);
+    assert.throws(() => namespace.get(undefined, "a"), /namespace/);
+    assert.throws(() => namespace.get("string", "a"), /namespace/);
+  });
+});
+
+// ── getMustExist ──────────────────────────────────────────────────────────────
+
+describe("getMustExist()", () => {
+  it("returns the value when present", () => {
+    assert.equal(namespace.getMustExist({ a: { b: "x" } }, "a.b"), "x");
+  });
+
+  it("returns falsy values correctly (0 is not treated as absent)", () => {
+    assert.equal(namespace.getMustExist({ count: 0 }, "count"), 0);
+  });
+
+  it("throws when path is absent", () => {
+    assert.throws(() => namespace.getMustExist({}, "a.b"), /getMustExist/);
+  });
+
+  it("throws with opts.errorMessage when provided", () => {
+    assert.throws(
+      () => namespace.getMustExist({}, "a.b", { errorMessage: "entryText is required" }),
+      /entryText is required/
     );
   });
 
-  it('should support incremental knowledge building with leafNode', () => {
-    const knowledge = {};
-    
-    // First mention
-    namespace.leafNode(knowledge, 'facts.name', 'Alice');
-    assert.strictEqual(knowledge.facts.name, 'Alice');
-    
-    // Try to overwrite (should not work)
-    namespace.leafNode(knowledge, 'facts.name', 'Bob');
-    assert.strictEqual(knowledge.facts.name, 'Alice');
+  it("includes the path in the default error message", () => {
+    assert.throws(
+      () => namespace.getMustExist({}, "config.db.url"),
+      /config\.db\.url/
+    );
   });
 
-  it('should validate required fields in agent output', () => {
-    const requiredPaths = ['intent.type', 'entities.primary', 'response.text'];
-    
-    function validateAgentOutput(output) {
-      return requiredPaths.filter(path => !namespace.exists(output, path));
-    }
-    
-    const validOutput = {
-      intent: { type: 'query' },
-      entities: { primary: 'user' },
-      response: { text: 'Hello!' }
-    };
-    
-    const invalidOutput = {
-      intent: { type: 'query' },
-      response: { text: 'Hello!' }
-      // missing entities.primary
-    };
-    
-    assert.deepStrictEqual(validateAgentOutput(validOutput), []);
-    assert.deepStrictEqual(validateAgentOutput(invalidOutput), ['entities.primary']);
-  });
-
-  it('should support multi-step tool chains', () => {
-    const context = {};
-    
-    // Tool 1 result
-    namespace.setValue(context, 'tool1.result.userId', 'user-123');
-    
-    // Tool 2 uses Tool 1 result
-    const userId = namespace.getMustExist(context, 'tool1.result.userId');
-    namespace.setValue(context, 'tool2.result.orders', [{ id: 'order-1' }]);
-    
-    // Tool 3 uses Tool 2 result
-    const orderId = namespace.getMustExist(context, 'tool2.result.orders.0.id');
-    namespace.setValue(context, 'tool3.result.refund', { status: 'completed' });
-    
-    assert.strictEqual(namespace.getMustExist(context, 'tool3.result.refund.status'), 'completed');
+  it("never writes", () => {
+    const obj = {};
+    try { namespace.getMustExist(obj, "a"); } catch (_) {}
+    assert.deepEqual(obj, {});
   });
 });
 
-describe('API Endpoint Pattern', () => {
-  it('should support standardized response envelope', () => {
-    const context = {
-      ctx: {
-        config: {
-          database: { url: 'postgres://localhost/app' }
-        }
-      }
-    };
-    
-    const req = { body: { userId: 'user-123' } };
-    const res = {
-      statusCode: null,
-      jsonBody: null,
-      status(code) { this.statusCode = code; return this; },
-      json(body) { this.jsonBody = body; return this; }
-    };
-    
-    // Simulate API handler
-    const responseBody = {
-      success: false,
-      statusCode: 400,
-      errorMessage: 'Bad Request'
-    };
-    
-    try {
-      const dbUrl = namespace.getMustExist(context, 'ctx.config.database.url');
-      const userId = namespace.getMustExist(req.body, 'userId');
-      
-      responseBody.results = { dbUrl, userId };
-      responseBody.statusCode = 200;
-      responseBody.success = true;
-      delete responseBody.errorMessage;
-    } catch (error) {
-      responseBody.errorMessage = error.message;
+// ── getMustEmpty ──────────────────────────────────────────────────────────────
+
+describe("getMustEmpty()", () => {
+  it("does not throw when path is absent", () => {
+    assert.doesNotThrow(() => namespace.getMustEmpty({}, "a.b"));
+  });
+
+  it("throws when path holds a value", () => {
+    assert.throws(() => namespace.getMustEmpty({ a: 1 }, "a"), /getMustEmpty/);
+  });
+
+  it("throws even for falsy stored values (0 is still present)", () => {
+    assert.throws(() => namespace.getMustEmpty({ a: 0 }, "a"), /getMustEmpty/);
+    assert.throws(() => namespace.getMustEmpty({ a: false }, "a"), /getMustEmpty/);
+    assert.throws(() => namespace.getMustEmpty({ a: null }, "a"), /getMustEmpty/);
+  });
+
+  it("never writes", () => {
+    const obj = {};
+    namespace.getMustEmpty(obj, "a");
+    assert.deepEqual(obj, {});
+  });
+});
+
+// ── getOrDefault ──────────────────────────────────────────────────────────────
+
+describe("getOrDefault()", () => {
+  it("returns the stored value when present", () => {
+    assert.equal(namespace.getOrDefault({ a: 7 }, "a", 99), 7);
+  });
+
+  it("returns standIn when path is absent", () => {
+    assert.equal(namespace.getOrDefault({}, "a", 99), 99);
+  });
+
+  it("returns standIn 0 when absent (not treated as falsy standIn)", () => {
+    assert.equal(namespace.getOrDefault({}, "a", 0), 0);
+  });
+
+  it("returns standIn null when absent", () => {
+    assert.equal(namespace.getOrDefault({}, "a", null), null);
+  });
+
+  it("returns stored 0 not standIn when 0 is stored", () => {
+    assert.equal(namespace.getOrDefault({ a: 0 }, "a", 99), 0);
+  });
+
+  it("returns stored false not standIn when false is stored", () => {
+    assert.equal(namespace.getOrDefault({ a: false }, "a", true), false);
+  });
+
+  it("never writes", () => {
+    const obj = {};
+    namespace.getOrDefault(obj, "a.b", {});
+    assert.deepEqual(obj, {});
+  });
+});
+
+// ── exists ────────────────────────────────────────────────────────────────────
+
+describe("exists()", () => {
+  it("returns true for a present path", () => {
+    assert.equal(namespace.exists({ a: { b: "x" } }, "a.b"), true);
+  });
+
+  it("returns false for an absent path", () => {
+    assert.equal(namespace.exists({}, "a.b"), false);
+  });
+
+  it("returns true for all falsy stored values (0, false, '', null)", () => {
+    assert.equal(namespace.exists({ v: 0 },     "v"), true);
+    assert.equal(namespace.exists({ v: false },  "v"), true);
+    assert.equal(namespace.exists({ v: "" },     "v"), true);
+    assert.equal(namespace.exists({ v: null },   "v"), true);
+  });
+
+  it("returns true for stored undefined (key present)", () => {
+    assert.equal(namespace.exists({ a: undefined }, "a"), true);
+  });
+
+  it("returns false when intermediate is null", () => {
+    assert.equal(namespace.exists({ a: null }, "a.b"), false);
+  });
+});
+
+// ── set ───────────────────────────────────────────────────────────────────────
+
+describe("set()", () => {
+  it("writes a value at a new path", () => {
+    const obj = {};
+    namespace.set(obj, "a.b", 42);
+    assert.equal(obj.a.b, 42);
+  });
+
+  it("returns the written value", () => {
+    const obj = {};
+    const result = namespace.set(obj, "a", "hello");
+    assert.equal(result, "hello");
+  });
+
+  it("auto-vivifies missing intermediate objects", () => {
+    const obj = {};
+    namespace.set(obj, "a.b.c.d", "deep");
+    assert.deepEqual(obj, { a: { b: { c: { d: "deep" } } } });
+  });
+
+  it("throws if the path already holds a value", () => {
+    assert.throws(() => namespace.set({ a: 1 }, "a", 2), /cannot overwrite/);
+  });
+
+  it("throws even when the existing value is falsy (0 is present)", () => {
+    assert.throws(() => namespace.set({ a: 0 }, "a", 1), /cannot overwrite/);
+  });
+
+  it("throws if an intermediate segment is a primitive", () => {
+    assert.throws(() => namespace.set({ a: 5 }, "a.b", 1), /non-object/);
+  });
+
+  it("throws for null path", () => {
+    assert.throws(() => namespace.set({}, null, 1), /path cannot be null/);
+  });
+
+  it("writes various value types", () => {
+    const obj = {};
+    namespace.set(obj, "str",  "hello");
+    namespace.set(obj, "num",  0);
+    namespace.set(obj, "bool", false);
+    namespace.set(obj, "nil",  null);
+    namespace.set(obj, "arr",  [1, 2]);
+    assert.equal(obj.str, "hello");
+    assert.equal(obj.num, 0);
+    assert.equal(obj.bool, false);
+    assert.equal(obj.nil, null);
+    assert.deepEqual(obj.arr, [1, 2]);
+  });
+});
+
+// ── setMustExist ──────────────────────────────────────────────────────────────
+
+describe("setMustExist()", () => {
+  it("overwrites an existing value", () => {
+    const obj = { a: { b: 1 } };
+    namespace.setMustExist(obj, "a.b", 99);
+    assert.equal(obj.a.b, 99);
+  });
+
+  it("returns the written value", () => {
+    const obj = { x: 0 };
+    assert.equal(namespace.setMustExist(obj, "x", 7), 7);
+  });
+
+  it("throws if path is absent", () => {
+    assert.throws(() => namespace.setMustExist({}, "a.b", 1), /setMustExist/);
+  });
+
+  it("throws if intermediate segment is absent", () => {
+    assert.throws(() => namespace.setMustExist({}, "a.b", 1), /setMustExist/);
+  });
+
+  it("throws for null path", () => {
+    assert.throws(() => namespace.setMustExist({}, null, 1), /path cannot be null/);
+  });
+});
+
+// ── setOrDefault ─────────────────────────────────────────────────────────────
+
+describe("setOrDefault()", () => {
+  it("writes and returns the value when path is absent", () => {
+    const obj = {};
+    const result = namespace.setOrDefault(obj, "cache", {});
+    assert.deepEqual(result, {});
+    assert.ok(obj.cache !== undefined);
+  });
+
+  it("returns the existing value without writing when path is present", () => {
+    const original = [1, 2, 3];
+    const obj = { list: original };
+    const result = namespace.setOrDefault(obj, "list", []);
+    assert.equal(result, original);
+    assert.deepEqual(obj.list, [1, 2, 3]);
+  });
+
+  it("returns existing falsy values (0) without overwriting", () => {
+    const obj = { count: 0 };
+    const result = namespace.setOrDefault(obj, "count", 99);
+    assert.equal(result, 0);
+    assert.equal(obj.count, 0);
+  });
+
+  it("returns existing false without overwriting", () => {
+    const obj = { flag: false };
+    const result = namespace.setOrDefault(obj, "flag", true);
+    assert.equal(result, false);
+  });
+
+  it("auto-vivifies missing intermediate objects", () => {
+    const obj = {};
+    namespace.setOrDefault(obj, "a.b.leaf", "first");
+    assert.equal(obj.a.b.leaf, "first");
+  });
+
+  it("multiple calls to the same absent path — first one wins", () => {
+    const context = {};
+    const first  = namespace.setOrDefault(context, "config", { x: 1 });
+    const second = namespace.setOrDefault(context, "config", { x: 2 });
+    assert.equal(first, second);
+    assert.equal(context.config.x, 1);
+  });
+
+  it("throws if an intermediate is a non-object primitive", () => {
+    assert.throws(() => namespace.setOrDefault({ a: 5 }, "a.b", 1), /non-object/);
+  });
+
+  it("throws for null path", () => {
+    assert.throws(() => namespace.setOrDefault({}, null, 1), /path cannot be null/);
+  });
+});
+
+// ── setOverwrite ──────────────────────────────────────────────────────────────
+
+describe("setOverwrite()", () => {
+  it("writes a new value", () => {
+    const obj = {};
+    namespace.setOverwrite(obj, "a", 1);
+    assert.equal(obj.a, 1);
+  });
+
+  it("clobbers an existing value", () => {
+    const obj = { a: "old" };
+    namespace.setOverwrite(obj, "a", "new");
+    assert.equal(obj.a, "new");
+  });
+
+  it("returns the written value", () => {
+    assert.equal(namespace.setOverwrite({}, "x", 42), 42);
+  });
+
+  it("auto-vivifies missing intermediates", () => {
+    const obj = {};
+    namespace.setOverwrite(obj, "a.b.c", "deep");
+    assert.equal(obj.a.b.c, "deep");
+  });
+
+  it("clobbers a non-object intermediate to reach the leaf", () => {
+    const obj = { a: 5 };
+    namespace.setOverwrite(obj, "a.b", "leaf");
+    assert.equal(obj.a.b, "leaf");
+  });
+
+  it("throws for null path", () => {
+    assert.throws(() => namespace.setOverwrite({}, null, 1), /path cannot be null/);
+  });
+});
+
+// ── convergence pattern ───────────────────────────────────────────────────────
+
+describe("convergence pattern (setOrDefault load-once)", () => {
+  it("config loaded exactly once across many calls", () => {
+    let loadCount = 0;
+    function loadConfig() { loadCount++; return { version: 1 }; }
+
+    const context = {};
+    for (let i = 0; i < 5; i++) {
+      namespace.setOrDefault(context, "config", loadConfig());
     }
-    
-    res.status(responseBody.statusCode).json(responseBody);
-    
-    assert.strictEqual(res.statusCode, 200);
-    assert.strictEqual(res.jsonBody.success, true);
-    assert.deepStrictEqual(res.jsonBody.results, {
-      dbUrl: 'postgres://localhost/app',
-      userId: 'user-123'
+    // loadConfig() is evaluated 5 times (JS eager evaluation),
+    // but only the first result is stored.
+    assert.equal(context.config.version, 1);
+    assert.equal(loadCount, 5);
+  });
+
+  it("first caller establishes the value; later callers get the same object", () => {
+    const context = {};
+    const first  = namespace.setOrDefault(context, "users.alice.entries", []);
+    first.push("entry-1");
+    const second = namespace.setOrDefault(context, "users.alice.entries", []);
+    assert.equal(first, second);
+    assert.equal(second.length, 1);
+  });
+});
+
+// ── build-forward response pattern ───────────────────────────────────────────
+
+describe("build-forward response pattern", () => {
+  it("statusCode position tracks fault correctly", () => {
+    function handleRequest(request) {
+      const responseBody = { success: false, statusCode: 400 };
+
+      const entryText = namespace.get(request, "body.entryText");
+      if (namespace.isNotFound(entryText)) {
+        responseBody.errorMessage = "entryText";
+        return responseBody;
+      }
+
+      responseBody.statusCode = 500;
+      try {
+        if (request.body.__forceFailure) throw new Error("forced failure");
+        namespace.set(responseBody, "results.entry", { id: 1, entryText });
+        responseBody.statusCode = 200;
+        responseBody.success    = true;
+      } catch (error) {
+        responseBody.errorMessage = error.message;
+      }
+      return responseBody;
+    }
+
+    assert.equal(handleRequest({ body: { entryText: "hello" } }).statusCode, 200);
+    assert.equal(handleRequest({ body: {} }).statusCode, 400);
+    assert.equal(handleRequest({ body: { entryText: "hi", __forceFailure: true } }).statusCode, 500);
+  });
+});
+
+// ── handler preamble pattern ──────────────────────────────────────────────────
+
+describe("handler preamble pattern", () => {
+  it("getMustExist locates the failure precisely", () => {
+    const context = { config: { db: { url: "postgres://localhost" } } };
+    const context_bad = { config: {} };
+
+    assert.doesNotThrow(() => namespace.getMustExist(context, "config.db.url"));
+    assert.throws(
+      () => namespace.getMustExist(context_bad, "config.db.url"),
+      /config\.db\.url/
+    );
+  });
+});
+
+// ── namespace.path ────────────────────────────────────────────────────────────
+
+describe("namespace.path.join()", () => {
+  it("joins string parts with dots", () => {
+    assert.equal(namespace.path.join("a", "b", "c"), "a.b.c");
+  });
+
+  it("flattens dotted strings — partial paths compose cleanly", () => {
+    assert.equal(namespace.path.join("a.b", "c"), "a.b.c");
+  });
+
+  it("flattens arrays", () => {
+    assert.equal(namespace.path.join("a", ["b", "c"]), "a.b.c");
+  });
+
+  it("handles mixed arrays and dotted strings", () => {
+    assert.equal(namespace.path.join("a.b", ["c", "d"], "e"), "a.b.c.d.e");
+  });
+
+  it("primary use case — build a path from domain constants and runtime values", () => {
+    const users_namespace = "users";
+    const userId_value    = "alice";
+    assert.equal(namespace.path.join(users_namespace, userId_value, "entries"), "users.alice.entries");
+  });
+
+  it("returns empty string for no parts", () => {
+    assert.equal(namespace.path.join(), "");
+  });
+});
+
+describe("namespace.path.joinSlash()", () => {
+  it("joins parts with slashes", () => {
+    assert.equal(namespace.path.joinSlash("a", "b", "c"), "a/b/c");
+  });
+
+  it("flattens slash-separated strings", () => {
+    assert.equal(namespace.path.joinSlash("a/b", "c"), "a/b/c");
+  });
+});
+
+describe("namespace.path.split()", () => {
+  it("splits a dotted path into segments", () => {
+    assert.deepEqual(namespace.path.split("a.b.c"), ["a", "b", "c"]);
+  });
+
+  it("single segment returns a one-element array", () => {
+    assert.deepEqual(namespace.path.split("a"), ["a"]);
+  });
+
+  it("throws for non-string input", () => {
+    assert.throws(() => namespace.path.split(42), /must be a string/);
+  });
+});
+
+describe("namespace.path.isRootOf()", () => {
+  it("returns true when root is a proper prefix at a segment boundary", () => {
+    assert.equal(namespace.path.isRootOf("users.alice", "users.alice.entries"), true);
+  });
+
+  it("returns true for an exact match", () => {
+    assert.equal(namespace.path.isRootOf("users.alice", "users.alice"), true);
+  });
+
+  it("returns false when the match is not at a segment boundary", () => {
+    assert.equal(namespace.path.isRootOf("users.alice", "users.alicex"), false);
+  });
+
+  it("returns false for an unrelated path", () => {
+    assert.equal(namespace.path.isRootOf("users.alice", "users.bob.entries"), false);
+  });
+
+  it("single-segment root", () => {
+    assert.equal(namespace.path.isRootOf("users", "users.alice.entries"), true);
+    assert.equal(namespace.path.isRootOf("users", "config"), false);
+  });
+});
+
+describe("namespace.path.tween()", () => {
+  it("inserts default 'children' between each segment", () => {
+    assert.equal(namespace.path.tween("a.b.c"), "a.children.b.children.c");
+  });
+
+  it("uses a custom separator when provided", () => {
+    assert.equal(namespace.path.tween("a.b.c", "items"), "a.items.b.items.c");
+  });
+
+  it("single-segment path passes through unchanged", () => {
+    assert.equal(namespace.path.tween("a"), "a");
+  });
+
+  it("returns undefined for non-string input", () => {
+    assert.equal(namespace.path.tween(null), undefined);
+  });
+});
+
+// ── namespace.batch ───────────────────────────────────────────────────────────
+
+describe("namespace.batch.destructureMustExist()", () => {
+  it("returns a plain object mapping local keys to tree values", () => {
+    const obj = { a: 1, b: { c: 2 } };
+    const result_node = namespace.batch.destructureMustExist(obj, {
+      first_value:  "a",
+      second_value: "b.c",
     });
-    assert.strictEqual(res.jsonBody.errorMessage, undefined);
+    assert.deepEqual(result_node, { first_value: 1, second_value: 2 });
   });
 
-  it('should include full path in getMustExist errors', () => {
-    const context = {};
-    
-    try {
-      namespace.getMustExist(context, 'ctx.config.database.url');
-      assert.fail('Should have thrown');
-    } catch (error) {
-      assert.ok(error.message.includes('Property not found'));
-      assert.ok(error.message.includes('ctx.config.database.url'));
-    }
+  it("throws if any path is absent — and names the path", () => {
+    const obj = { a: 1 };
+    assert.throws(
+      () => namespace.batch.destructureMustExist(obj, { x: "a", y: "missing.path" }),
+      /missing\.path/
+    );
   });
 
-  it('should support custom error messages for API validation', () => {
-    const req = { body: {} };
-    
-    try {
-      namespace.getMustExist(req.body, 'userId', {
-        errorMessage: 'API Error: userId is required'
-      });
-      assert.fail('Should have thrown');
-    } catch (error) {
-      assert.ok(error.message.includes('API Error: userId is required'));
-    }
+  it("supports opts.errorMessage forwarded to getMustExist", () => {
+    const obj = {};
+    assert.throws(
+      () => namespace.batch.destructureMustExist(obj, { x: "a" }, { errorMessage: "a is required" }),
+      /a is required/
+    );
   });
 
-  it('should distinguish missing vs null in form validation', () => {
-    const fieldDefs = {
-      name: { required: true },
-      email: { required: true },
-      phone: { required: false }
-    };
-    
-    // Case 1: field not provided (NotFound)
-    const appDataMissing = { fieldValues: {} };
-    const nameMissing = namespace.getIfExists(appDataMissing, 'fieldValues.name');
-    assert.strictEqual(namespace.isNotFound(nameMissing), true);
-    
-    // Case 2: field explicitly null
-    const appDataNull = { fieldValues: { email: null } };
-    const emailNull = namespace.getIfExists(appDataNull, 'fieldValues.email');
-    assert.strictEqual(namespace.isNotFound(emailNull), false);
-    assert.strictEqual(emailNull, null);
-    
-    // Case 3: field exists with falsy values
-    const appDataFalsy = { fieldValues: { phone: '' } };
-    const phoneEmpty = namespace.getIfExists(appDataFalsy, 'fieldValues.phone');
-    assert.strictEqual(namespace.isNotFound(phoneEmpty), false);
-    assert.strictEqual(phoneEmpty, '');
-  });
-
-  it('should support dynamic namespace path building', () => {
-    const context = {
-      tenants: {
-        'tenant-1': { config: { theme: 'light' } },
-        'tenant-2': { config: { theme: 'dark' } }
-      }
-    };
-    
-    function getTenantConfig(tenantId) {
-      const tenantNamespace = `tenants.${tenantId}.config`;
-      return namespace.getIfExists(context, tenantNamespace, {
-        defaultValueToReturn: { theme: 'default' }
-      });
-    }
-    
-    assert.deepStrictEqual(getTenantConfig('tenant-1'), { theme: 'light' });
-    assert.deepStrictEqual(getTenantConfig('tenant-2'), { theme: 'dark' });
-    assert.deepStrictEqual(getTenantConfig('tenant-999'), { theme: 'default' });
-  });
-
-  it('should support safe cache initialization pattern', () => {
-    const context = {};
-    
-    // First call creates cache
-    const cache1 = namespace.leafNode(context, 'cache.users', new Map());
-    cache1.set('user-1', { name: 'Alice' });
-    
-    // Second call returns existing cache
-    const cache2 = namespace.leafNode(context, 'cache.users', new Map());
-    
-    assert.strictEqual(cache1, cache2);
-    assert.deepStrictEqual(cache2.get('user-1'), { name: 'Alice' });
+  it("the mapping IS the preamble — destructure the result directly", () => {
+    const context = { config: { version: 2 }, users: { alice: { entries: [] } } };
+    const { config_node, userEntries_node } = namespace.batch.destructureMustExist(context, {
+      config_node:      "config",
+      userEntries_node: "users.alice.entries",
+    });
+    assert.equal(config_node.version, 2);
+    assert.deepEqual(userEntries_node, []);
   });
 });
 
-describe('namespace module exports', () => {
-  it('should export namespace function', () => {
-    assert.strictEqual(typeof namespace, 'function');
+describe("namespace.batch.allMustExist()", () => {
+  it("returns object keyed by the dotted paths themselves", () => {
+    const obj = { a: { b: 1 }, c: { d: 2 } };
+    const result_node = namespace.batch.allMustExist(obj, ["a.b", "c.d"]);
+    assert.deepEqual(result_node, { "a.b": 1, "c.d": 2 });
   });
 
-  it('should have all methods attached', () => {
-    assert.strictEqual(typeof namespace.getIfExists, 'function');
-    assert.strictEqual(typeof namespace.getMustExist, 'function');
-    assert.strictEqual(typeof namespace.setValue, 'function');
-    assert.strictEqual(typeof namespace.exists, 'function');
-    assert.strictEqual(typeof namespace.remove, 'function');
-    assert.strictEqual(typeof namespace.leafNode, 'function');
-    assert.strictEqual(typeof namespace.join, 'function');
-    assert.strictEqual(typeof namespace.flatten, 'function');
-    assert.strictEqual(typeof namespace.expand, 'function');
-    assert.strictEqual(typeof namespace.isNotFound, 'function');
-    assert.strictEqual(typeof namespace.traverse, 'function');
+  it("throws if any path is absent", () => {
+    const obj = { a: 1 };
+    assert.throws(() => namespace.batch.allMustExist(obj, ["a", "b"]), /getMustExist/);
   });
 
-  it('should have NotFound sentinel', () => {
+  it("works with a single-path list", () => {
+    const obj = { x: 42 };
+    assert.deepEqual(namespace.batch.allMustExist(obj, ["x"]), { x: 42 });
+  });
+});
+
+describe("namespace.batch.extractMustExist()", () => {
+  it("returns the value and removes it from the tree", () => {
+    const obj = { token: "abc", other: 1 };
+    const extracted_value = namespace.batch.extractMustExist(obj, "token");
+    assert.equal(extracted_value, "abc");
+    assert.equal(namespace.exists(obj, "token"), false);
+    assert.equal(obj.other, 1);
+  });
+
+  it("works on a nested path", () => {
+    const obj = { queue: { first: "msg1", second: "msg2" } };
+    const extracted_value = namespace.batch.extractMustExist(obj, "queue.first");
+    assert.equal(extracted_value, "msg1");
+    assert.equal(namespace.exists(obj, "queue.first"), false);
+    assert.equal(obj.queue.second, "msg2");
+  });
+
+  it("throws if the path is absent", () => {
+    const obj = {};
+    assert.throws(() => namespace.batch.extractMustExist(obj, "missing"), /getMustExist/);
+  });
+
+  it("does not leave empty parent objects behind — parent remains", () => {
+    const obj = { a: { b: 1, c: 2 } };
+    namespace.batch.extractMustExist(obj, "a.b");
+    assert.ok(obj.a);
+    assert.equal(obj.a.c, 2);
+  });
+});
+
+// ── verb exports ──────────────────────────────────────────────────────────────
+
+describe("namespace exports", () => {
+  const verbs = [
+    "get", "getMustExist", "getMustEmpty", "getOrDefault",
+    "set", "setMustExist", "setOrDefault", "setOverwrite",
+    "exists", "isNotFound",
+  ];
+
+  for (const verb of verbs) {
+    it(`exports ${verb} as a function`, () => {
+      assert.equal(typeof namespace[verb], "function");
+    });
+  }
+
+  it("exports NotFound sentinel", () => {
     assert.ok(namespace.NotFound);
-    assert.strictEqual(namespace.NotFound.namespaceFunctionConstant, 'NotFound');
+    assert.ok(Object.isFrozen(namespace.NotFound));
   });
 });
