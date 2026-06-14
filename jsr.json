@@ -2,7 +2,7 @@
   "name": "@visualtools001/namespace",
   "version": "1.0.3",
   "exports": {
-    ".": "./dist/namespace.cjs"
+    ".": "./src/core.ts"
   },
   "publish": {
     "include": [
@@ -10,6 +10,7 @@
       "dist/namespace.d.ts",
       "dist/namespace.cjs",
       "dist/namespace.umd.js",
+      "src/core.ts",
       "src/core.js",
       "README.md",
       "LICENSE"

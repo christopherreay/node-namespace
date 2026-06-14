@@ -1,6 +1,6 @@
 "use strict";
 
-const namespace = require("../../src/core.js");
+const namespace = require("../../dist/namespace.cjs");
 
 // namespace.path and namespace.batch are now part of src/core.js.
 

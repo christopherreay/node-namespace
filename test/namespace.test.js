@@ -8,7 +8,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-const namespace = require("../src/core.js");
+const namespace = require("../dist/namespace.cjs");
 const { NotFound } = namespace;
 
 // ── NotFound sentinel ─────────────────────────────────────────────────────────
