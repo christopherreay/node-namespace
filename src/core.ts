@@ -1,6 +1,27 @@
 // NotFound sentinel — frozen; returned by get() when a path is absent
 export const NotFound: Readonly<{ namespaceFunctionConstant: "NotFound" }> = Object.freeze({ namespaceFunctionConstant: "NotFound" });
 
+// ── global config ─────────────────────────────────────────────────────────────
+
+const globalConfig = { errorContext: false };
+
+export function configure(options: { errorContext?: boolean }): void {
+  if (options && options.errorContext !== undefined) {
+    globalConfig.errorContext = options.errorContext;
+  }
+}
+
+function buildErrorMessage(message: string, rootObject: any): string {
+  if (!globalConfig.errorContext) return message;
+  try {
+    const json_value      = JSON.stringify(rootObject);
+    const truncated_value = json_value.length > 200 ? json_value.slice(0, 200) + "…" : json_value;
+    return message + "\n  object: " + truncated_value;
+  } catch (_ignored) {
+    return message + "\n  object: [unstringifiable]";
+  }
+}
+
 // ── internal helpers ──────────────────────────────────────────────────────────
 
 function isObject(value: unknown): value is object {
@@ -38,7 +59,7 @@ export function traverse(traversalContext: any): any {
   const dottedAddress = traversalContext.address;
 
   if (rootObject === undefined || rootObject === null || !isObject(rootObject)) {
-    throw new Error("namespace: object is not a valid root");
+    throw new Error(buildErrorMessage("namespace: object is not a valid root", rootObject));
   }
 
   if (dottedAddress === null) {
@@ -47,7 +68,7 @@ export function traverse(traversalContext: any): any {
   }
 
   if (!isString(dottedAddress)) {
-    throw new Error("namespace: address must be a string: " + dottedAddress);
+    throw new Error(buildErrorMessage("namespace: address must be a string: " + dottedAddress, rootObject));
   }
 
   const addressSegments               = dottedAddress.split(".");
@@ -111,10 +132,10 @@ export function get(object: any, path: string): any {
 export function getMustExist(object: any, path: string, options?: { errorMessage?: string }): any {
   const foundValue_probed = get(object, path);
   if (foundValue_probed === NotFound) {
-    const errorMessage =
+    const baseMessage =
       (options && options.errorMessage) ||
       `namespace.getMustExist: property not found at "${path}"`;
-    throw new Error(errorMessage);
+    throw new Error(buildErrorMessage(baseMessage, object));
   }
   return foundValue_probed;
 }
@@ -125,7 +146,10 @@ export function getMustExist(object: any, path: string, options?: { errorMessage
 export function getMustEmpty(object: any, path: string): void {
   const foundValue_probed = get(object, path);
   if (foundValue_probed !== NotFound) {
-    throw new Error(`namespace.getMustEmpty: path must be empty but value found at "${path}"`);
+    throw new Error(buildErrorMessage(
+      `namespace.getMustEmpty: path must be empty but value found at "${path}"`,
+      object
+    ));
   }
 }
 
@@ -154,13 +178,17 @@ export function set(object: any, path: string, valueToSet: any): any {
         if (!pathStep.keyExists) {
           pathStep.next = pathStep.current[pathStep.addressComponent] = {};
         } else if (!isObject(pathStep.next)) {
-          throw new Error(
-            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
-          );
+          throw new Error(buildErrorMessage(
+            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
+            object
+          ));
         }
       } else {
         if (pathStep.keyExists) {
-          throw new Error(`namespace.set: cannot overwrite existing value at "${path}"`);
+          throw new Error(buildErrorMessage(
+            `namespace.set: cannot overwrite existing value at "${path}"`,
+            object
+          ));
         }
         pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
         pathStep.returnNow = true;
@@ -185,11 +213,17 @@ export function setMustExist(object: any, path: string, valueToSet: any): any {
     func(pathStep: any) {
       if (!pathStep.finalAddressComponent) {
         if (!pathStep.keyExists || !isObject(pathStep.next)) {
-          throw new Error(`namespace.setMustExist: path does not exist: "${path}"`);
+          throw new Error(buildErrorMessage(
+            `namespace.setMustExist: path does not exist: "${path}"`,
+            object
+          ));
         }
       } else {
         if (!pathStep.keyExists) {
-          throw new Error(`namespace.setMustExist: path must exist but is absent: "${path}"`);
+          throw new Error(buildErrorMessage(
+            `namespace.setMustExist: path must exist but is absent: "${path}"`,
+            object
+          ));
         }
         pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
         pathStep.returnNow = true;
@@ -217,9 +251,10 @@ export function setOrDefault(object: any, path: string, valueToSet: any): any {
         if (!pathStep.keyExists) {
           pathStep.next = pathStep.current[pathStep.addressComponent] = {};
         } else if (!isObject(pathStep.next)) {
-          throw new Error(
-            `namespace.setOrDefault: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
-          );
+          throw new Error(buildErrorMessage(
+            `namespace.setOrDefault: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
+            object
+          ));
         }
       } else {
         if (pathStep.keyExists) {
@@ -241,7 +276,7 @@ export function setOrDefault(object: any, path: string, valueToSet: any): any {
 // Writes unconditionally, clobbering any existing value.
 // Auto-vivifies missing intermediate objects.
 // The long name is the signal: you mean to clobber.
-export function setOverwrite(object: any, path: string, valueToSet: any): any {
+export function setOverwrite(object: any, path: string, valueToSet: any, options?: { overwriteStructure?: boolean }): any {
   if (path === null) throw new Error("namespace.setOverwrite: path cannot be null");
 
   const traversalContext = {
@@ -250,8 +285,17 @@ export function setOverwrite(object: any, path: string, valueToSet: any): any {
     valueToSet,
     func(pathStep: any) {
       if (!pathStep.finalAddressComponent) {
-        if (!pathStep.keyExists || !isObject(pathStep.next)) {
+        if (!pathStep.keyExists) {
           pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+        } else if (!isObject(pathStep.next)) {
+          if (options && options.overwriteStructure) {
+            pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+          } else {
+            throw new Error(buildErrorMessage(
+              `namespace.setOverwrite: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}" — use { overwriteStructure: true } to clobber structure`,
+              object
+            ));
+          }
         }
       } else {
         pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
@@ -407,6 +451,7 @@ export const batch: {
 
 const namespace = {
   NotFound,
+  configure,
   get,
   getMustExist,
   getMustEmpty,

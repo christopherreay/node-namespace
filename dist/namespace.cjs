@@ -14,6 +14,21 @@ function requireCore () {
 	// NotFound sentinel — frozen; returned by get() when a path is absent
 	const NotFound = Object.freeze({ namespaceFunctionConstant: "NotFound" });
 
+	// ── global config ─────────────────────────────────────────────────────────────
+
+	const globalConfig = {
+	  // When true, all error messages include the first 200 chars of the root object
+	  // as JSON so you can see what was actually in the tree at the time of the error.
+	  errorContext: false,
+	};
+
+	// configure({ errorContext: true }) — call once at app startup.
+	function configure(options) {
+	  if (options && options.errorContext !== undefined) {
+	    globalConfig.errorContext = options.errorContext;
+	  }
+	}
+
 	// ── internal helpers ──────────────────────────────────────────────────────────
 
 	function isObject(value) {
@@ -22,6 +37,20 @@ function requireCore () {
 
 	function isString(value) {
 	  return typeof value === "string";
+	}
+
+	// buildErrorMessage(message, rootObject)
+	// Appends the first 200 chars of rootObject JSON to the message when
+	// globalConfig.errorContext is true.  Used by every throw in the library.
+	function buildErrorMessage(message, rootObject) {
+	  if (!globalConfig.errorContext) return message;
+	  try {
+	    const json_value      = JSON.stringify(rootObject);
+	    const truncated_value = json_value.length > 200 ? json_value.slice(0, 200) + "…" : json_value;
+	    return message + "\n  object: " + truncated_value;
+	  } catch (_ignored) {
+	    return message + "\n  object: [unstringifiable]";
+	  }
 	}
 
 	// traverse(traversalContext) — walk a dotted path, calling traversalContext.func
@@ -51,7 +80,7 @@ function requireCore () {
 	  const dottedAddress  = traversalContext.address;
 
 	  if (rootObject === undefined || rootObject === null || !isObject(rootObject)) {
-	    throw new Error("namespace: object is not a valid root");
+	    throw new Error(buildErrorMessage("namespace: object is not a valid root", rootObject));
 	  }
 
 	  if (dottedAddress === null) {
@@ -60,7 +89,7 @@ function requireCore () {
 	  }
 
 	  if (!isString(dottedAddress)) {
-	    throw new Error("namespace: address must be a string: " + dottedAddress);
+	    throw new Error(buildErrorMessage("namespace: address must be a string: " + dottedAddress, rootObject));
 	  }
 
 	  const addressSegments        = dottedAddress.split(".");
@@ -124,10 +153,10 @@ function requireCore () {
 	function getMustExist(object, path, options) {
 	  const foundValue_probed = get(object, path);
 	  if (foundValue_probed === NotFound) {
-	    const errorMessage =
+	    const baseMessage =
 	      (options && options.errorMessage) ||
 	      `namespace.getMustExist: property not found at "${path}"`;
-	    throw new Error(errorMessage);
+	    throw new Error(buildErrorMessage(baseMessage, object));
 	  }
 	  return foundValue_probed;
 	}
@@ -138,7 +167,10 @@ function requireCore () {
 	function getMustEmpty(object, path) {
 	  const foundValue_probed = get(object, path);
 	  if (foundValue_probed !== NotFound) {
-	    throw new Error(`namespace.getMustEmpty: path must be empty but value found at "${path}"`);
+	    throw new Error(buildErrorMessage(
+	      `namespace.getMustEmpty: path must be empty but value found at "${path}"`,
+	      object
+	    ));
 	  }
 	}
 
@@ -168,13 +200,17 @@ function requireCore () {
 	          // Auto-vivify missing intermediate
 	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
 	        } else if (!isObject(pathStep.next)) {
-	          throw new Error(
-	            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
-	          );
+	          throw new Error(buildErrorMessage(
+	            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
+	            object
+	          ));
 	        }
 	      } else {
 	        if (pathStep.keyExists) {
-	          throw new Error(`namespace.set: cannot overwrite existing value at "${path}"`);
+	          throw new Error(buildErrorMessage(
+	            `namespace.set: cannot overwrite existing value at "${path}"`,
+	            object
+	          ));
 	        }
 	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
 	        pathStep.returnNow = true;
@@ -199,11 +235,17 @@ function requireCore () {
 	    func(pathStep) {
 	      if (!pathStep.finalAddressComponent) {
 	        if (!pathStep.keyExists || !isObject(pathStep.next)) {
-	          throw new Error(`namespace.setMustExist: path does not exist: "${path}"`);
+	          throw new Error(buildErrorMessage(
+	            `namespace.setMustExist: path does not exist: "${path}"`,
+	            object
+	          ));
 	        }
 	      } else {
 	        if (!pathStep.keyExists) {
-	          throw new Error(`namespace.setMustExist: path must exist but is absent: "${path}"`);
+	          throw new Error(buildErrorMessage(
+	            `namespace.setMustExist: path must exist but is absent: "${path}"`,
+	            object
+	          ));
 	        }
 	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
 	        pathStep.returnNow = true;
@@ -231,9 +273,10 @@ function requireCore () {
 	        if (!pathStep.keyExists) {
 	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
 	        } else if (!isObject(pathStep.next)) {
-	          throw new Error(
-	            `namespace.setOrDefault: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`
-	          );
+	          throw new Error(buildErrorMessage(
+	            `namespace.setOrDefault: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
+	            object
+	          ));
 	        }
 	      } else {
 	        if (pathStep.keyExists) {
@@ -253,11 +296,16 @@ function requireCore () {
 	  return traversalContext.toReturn;
 	}
 
-	// setOverwrite(object, path, value)
-	// Writes unconditionally, clobbering any existing value.
+	// setOverwrite(object, path, value, options?)
+	// Writes unconditionally, clobbering any existing leaf value.
 	// Auto-vivifies missing intermediate objects.
-	// The long name is the signal: you mean to clobber.
-	function setOverwrite(object, path, valueToSet) {
+	// The long name is the signal: you mean to clobber the VALUE, not the structure.
+	//
+	// By default, throws if a non-object intermediate is encountered — destroying
+	// structure is a different intent from clobbering a leaf.
+	// Pass { overwriteStructure: true } to override: any non-object intermediate
+	// will be replaced with a new object and traversal continues.
+	function setOverwrite(object, path, valueToSet, options) {
 	  if (path === null) throw new Error("namespace.setOverwrite: path cannot be null");
 
 	  const traversalContext = {
@@ -266,8 +314,19 @@ function requireCore () {
 	    valueToSet,
 	    func(pathStep) {
 	      if (!pathStep.finalAddressComponent) {
-	        if (!pathStep.keyExists || !isObject(pathStep.next)) {
+	        if (!pathStep.keyExists) {
+	          // Auto-vivify absent intermediate — always allowed
 	          pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+	        } else if (!isObject(pathStep.next)) {
+	          // Intermediate exists but is a primitive
+	          if (options && options.overwriteStructure) {
+	            pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+	          } else {
+	            throw new Error(buildErrorMessage(
+	              `namespace.setOverwrite: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}" — use { overwriteStructure: true } to clobber structure`,
+	              object
+	            ));
+	          }
 	        }
 	      } else {
 	        pathStep.current[pathStep.addressComponent] = pathStep.valueToSet;
@@ -413,6 +472,8 @@ function requireCore () {
 
 	const namespace = {
 	  NotFound,
+	  // config
+	  configure,
 	  // read
 	  get,
 	  getMustExist,

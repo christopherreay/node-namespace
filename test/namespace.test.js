@@ -360,9 +360,13 @@ describe("setOverwrite()", () => {
     assert.equal(obj.a.b.c, "deep");
   });
 
-  it("clobbers a non-object intermediate to reach the leaf", () => {
+  it("throws when an intermediate is a non-object (default — clobber is for values, not structure)", () => {
+    assert.throws(() => namespace.setOverwrite({ a: 5 }, "a.b", "leaf"), /non-object/);
+  });
+
+  it("clobbers a non-object intermediate with { overwriteStructure: true }", () => {
     const obj = { a: 5 };
-    namespace.setOverwrite(obj, "a.b", "leaf");
+    namespace.setOverwrite(obj, "a.b", "leaf", { overwriteStructure: true });
     assert.equal(obj.a.b, "leaf");
   });
 
@@ -626,10 +630,88 @@ describe("namespace.batch.extractMustExist()", () => {
   });
 });
 
+// ── namespace.configure ───────────────────────────────────────────────────────
+
+describe("namespace.configure()", () => {
+  // Always reset after each configure test so state doesn't leak
+  function reset() { namespace.configure({ errorContext: false }); }
+
+  it("errorContext: false — error message has no object context (default)", () => {
+    reset();
+    try { namespace.getMustExist({ a: 1 }, "missing"); } catch (error) {
+      assert.ok(!error.message.includes("object:"));
+    }
+  });
+
+  it("errorContext: true — getMustExist error includes object JSON", () => {
+    namespace.configure({ errorContext: true });
+    try {
+      namespace.getMustExist({ user: { name: "alice" } }, "user.missing");
+      assert.fail("should have thrown");
+    } catch (error) {
+      assert.ok(error.message.includes("object:"));
+      assert.ok(error.message.includes("alice"));
+    }
+    reset();
+  });
+
+  it("errorContext: true — getMustEmpty error includes object JSON", () => {
+    namespace.configure({ errorContext: true });
+    try {
+      namespace.getMustEmpty({ occupied: "yes" }, "occupied");
+      assert.fail("should have thrown");
+    } catch (error) {
+      assert.ok(error.message.includes("object:"));
+      assert.ok(error.message.includes("yes"));
+    }
+    reset();
+  });
+
+  it("errorContext: true — setOverwrite non-object error includes object JSON", () => {
+    namespace.configure({ errorContext: true });
+    try {
+      namespace.setOverwrite({ a: 5 }, "a.b", "leaf");
+      assert.fail("should have thrown");
+    } catch (error) {
+      assert.ok(error.message.includes("object:"));
+    }
+    reset();
+  });
+
+  it("errorContext: true — object JSON is truncated at 200 chars with ellipsis", () => {
+    namespace.configure({ errorContext: true });
+    const bigObj = {};
+    for (let i = 0; i < 50; i++) bigObj[`key${i}`] = `value${i}`;
+    try {
+      namespace.getMustExist(bigObj, "missing");
+      assert.fail("should have thrown");
+    } catch (error) {
+      const objectLine_value = error.message.split("\n").find(line => line.includes("object:"));
+      assert.ok(objectLine_value, "error should have an object: line");
+      // Content after "object: " should be <= 201 chars (200 + ellipsis)
+      const content_value = objectLine_value.replace("  object: ", "");
+      assert.ok(content_value.length <= 201, `object context too long: ${content_value.length}`);
+      assert.ok(content_value.endsWith("…"), "truncated content should end with ellipsis");
+    }
+    reset();
+  });
+
+  it("configure is idempotent — can be called multiple times", () => {
+    namespace.configure({ errorContext: true });
+    namespace.configure({ errorContext: true });
+    namespace.configure({ errorContext: false });
+    // Should not throw
+    try { namespace.getMustExist({}, "x"); } catch (error) {
+      assert.ok(!error.message.includes("object:"));
+    }
+  });
+});
+
 // ── verb exports ──────────────────────────────────────────────────────────────
 
 describe("namespace exports", () => {
   const verbs = [
+    "configure",
     "get", "getMustExist", "getMustEmpty", "getOrDefault",
     "set", "setMustExist", "setOrDefault", "setOverwrite",
     "exists", "isNotFound",
