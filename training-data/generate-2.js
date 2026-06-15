@@ -14,7 +14,7 @@ WRITE:
   namespace.set(obj, "a.b", val)               → create-only, auto-vivifies, throws if already exists
   namespace.setMustExist(obj, "a.b", val)      → update-only, throws if absent
   namespace.setOrDefault(obj, "a.b", val)      → writes if absent, returns whichever now holds
-  namespace.setOverwrite(obj, "a.b", val)      → unconditional write, auto-vivifies
+  namespace.setOverwrite(obj, "a.b", val)      → unconditional leaf clobber, auto-vivifies absent intermediates, throws if intermediate is a non-object (use { overwriteStructure: true } to also clobber intermediates)
 
 TEST:
   namespace.exists(obj, "a.b")                 → true/false (true even for 0, false, null, "")
@@ -1958,7 +1958,7 @@ function setNestedValue(obj, path, value) {
 const namespace = require('@visualtools001/namespace');
 
 function setNestedValue(obj_node, path_namespace, value) {
-  namespace.setOverwrite(obj_node, path_namespace, value);
+  namespace.setOverwrite(obj_node, path_namespace, value, { overwriteStructure: true });
   return obj_node;
 }
 
