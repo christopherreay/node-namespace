@@ -11,6 +11,86 @@ const assert = require("node:assert/strict");
 const namespace = require("../dist/namespace.cjs");
 const { NotFound } = namespace;
 
+// ── bare namespace() — auto-vivify path as plain object ──────────────────────
+
+describe("bare namespace()", () => {
+  it("vivifies a single missing segment", () => {
+    const obj = {};
+    const result = namespace(obj, "a");
+    assert.deepStrictEqual(obj, { a: {} });
+    assert.equal(result, obj.a);
+  });
+
+  it("vivifies a deep missing path", () => {
+    const obj = {};
+    const result = namespace(obj, "a.b.c");
+    assert.deepStrictEqual(obj, { a: { b: { c: {} } } });
+    assert.equal(result, obj.a.b.c);
+  });
+
+  it("returns existing plain object at leaf without modifying it", () => {
+    const existing = { x: 1 };
+    const obj = { a: { b: existing } };
+    const result = namespace(obj, "a.b");
+    assert.equal(result, existing);
+    assert.deepStrictEqual(existing, { x: 1 });
+  });
+
+  it("vivifies missing tail while traversing existing intermediates", () => {
+    const obj = { a: {} };
+    const result = namespace(obj, "a.b.c");
+    assert.deepStrictEqual(obj, { a: { b: { c: {} } } });
+    assert.equal(result, obj.a.b.c);
+  });
+
+  it("throws on non-object leaf (string)", () => {
+    const obj = { a: "hello" };
+    assert.throws(() => namespace(obj, "a"), /non-object value exists at "a"/);
+  });
+
+  it("throws on non-object leaf (number)", () => {
+    const obj = { a: { b: 42 } };
+    assert.throws(() => namespace(obj, "a.b"), /non-object value exists at "b"/);
+  });
+
+  it("throws on non-object leaf (array)", () => {
+    const obj = { a: [1, 2, 3] };
+    assert.throws(() => namespace(obj, "a"), /non-object value exists at "a"/);
+  });
+
+  it("throws on non-object intermediate (string)", () => {
+    const obj = { a: "blocker" };
+    assert.throws(() => namespace(obj, "a.b"), /non-object value exists at "a"/);
+  });
+
+  it("throws on non-object intermediate (number)", () => {
+    const obj = { a: { b: 99 } };
+    assert.throws(() => namespace(obj, "a.b.c"), /non-object value exists at "b"/);
+  });
+
+  it("throws on null/undefined path", () => {
+    assert.throws(() => namespace({}, null), /path cannot be null or undefined/);
+    assert.throws(() => namespace({}, undefined), /path cannot be null or undefined/);
+  });
+
+  it("is idempotent — second call returns same object", () => {
+    const obj = {};
+    const first  = namespace(obj, "a.b");
+    const second = namespace(obj, "a.b");
+    assert.equal(first, second);
+  });
+
+  it("namespace is callable as a function", () => {
+    assert.equal(typeof namespace, "function");
+  });
+
+  it("verbs still accessible on the function", () => {
+    assert.equal(typeof namespace.get, "function");
+    assert.equal(typeof namespace.set, "function");
+    assert.equal(typeof namespace.exists, "function");
+  });
+});
+
 // ── NotFound sentinel ─────────────────────────────────────────────────────────
 
 describe("NotFound sentinel", () => {

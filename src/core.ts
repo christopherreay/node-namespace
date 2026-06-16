@@ -447,9 +447,73 @@ export const batch: {
 
 };
 
+// ── bare namespace() ─────────────────────────────────────────────────────────
+//
+// namespace(object, path)
+// Ensure every segment of path exists as a plain object.
+//   absent       → vivify as {}
+//   plain object → return it
+//   anything else (array, string, number, …) → throw
+//
+// Auto-vivifies intermediates the same way set() does.
+// Returns the (possibly freshly created) object at the leaf.
+
+function namespaceEnsure(object: any, dottedPath: string): object {
+  if (dottedPath === null || dottedPath === undefined) {
+    throw new Error("namespace: path cannot be null or undefined");
+  }
+
+  const traversalContext = {
+    object,
+    address: dottedPath,
+    func(pathStep: any) {
+      if (!pathStep.keyExists) {
+        // absent → vivify
+        pathStep.next = pathStep.current[pathStep.addressComponent] = {};
+        if (pathStep.finalAddressComponent) {
+          pathStep.returnNow = true;
+          pathStep.toReturn  = pathStep.next;
+        }
+      } else if (isObject(pathStep.next) && !Array.isArray(pathStep.next)) {
+        // present and plain object → keep going or return
+        if (pathStep.finalAddressComponent) {
+          pathStep.returnNow = true;
+          pathStep.toReturn  = pathStep.next;
+        }
+      } else {
+        // present and not a plain object → throw
+        throw new Error(buildErrorMessage(
+          `namespace: non-object value exists at "${pathStep.addressComponent}" on path "${dottedPath}"`,
+          object
+        ));
+      }
+    }
+  };
+  traverse(traversalContext);
+  return traversalContext.toReturn;
+}
+
 // ── default export ────────────────────────────────────────────────────────────
 
-const namespace = {
+type Namespace = typeof namespaceEnsure & {
+  NotFound: Readonly<{ namespaceFunctionConstant: "NotFound" }>;
+  configure: typeof configure;
+  get: typeof get;
+  getMustExist: typeof getMustExist;
+  getMustEmpty: typeof getMustEmpty;
+  getOrDefault: typeof getOrDefault;
+  set: typeof set;
+  setMustExist: typeof setMustExist;
+  setOrDefault: typeof setOrDefault;
+  setOverwrite: typeof setOverwrite;
+  exists: typeof exists;
+  isNotFound: typeof isNotFound;
+  traverse: typeof traverse;
+  path: typeof path;
+  batch: typeof batch;
+};
+
+const namespace: Namespace = Object.assign(namespaceEnsure, {
   NotFound,
   configure,
   get,
@@ -465,6 +529,6 @@ const namespace = {
   traverse,
   path,
   batch,
-};
+});
 
 export default namespace;
