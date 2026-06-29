@@ -1,6 +1,6 @@
 {
-  "name": "@visualtools001/namespace",
-  "version": "1.1.0",
+  "name": "@visualtools/namespace",
+  "version": "1.1.1",
   "description": "Dotted-path namespace utilities for JavaScript — 8-verb point-contract API, path algebra, and batch contracts",
   "main": "dist/namespace.cjs",
   "module": "dist/namespace.mjs",
@@ -61,7 +61,5 @@
     "tslib": "^2.8.1",
     "typescript": "^6.0.3"
   },
-  "dependencies": {
-    "@visualtools001/namespace": "npm:@jsr/visualtools001__namespace@^1.0.2"
-  }
+  "dependencies": {}
 }
