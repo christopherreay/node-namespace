@@ -1,353 +1,247 @@
-# namespace
+# @visualtools/namespace
 
-Zero-dependency dotted-path namespace utilities for JavaScript. Auto-vivification, NotFound sentinel, and safety-by-default design.
+Zero-dependency dotted-path namespace utilities for JavaScript. Safety-by-default verbs, auto-vivification, and a NotFound sentinel that distinguishes "missing" from "undefined".
 
-Works identically in **Node.js** and **browsers**.
+Works in **Node.js**, **browsers**, and **TypeScript**.
 
 ## Install
 
 ```bash
-npm install @namespace-js/core
+npm install @visualtools/namespace
+# or
+yarn add @visualtools/namespace
 ```
 
-## Quick Start
+## Quick start
 
 ```javascript
-import namespace from '@namespace-js/core';
-// or: const namespace = require('@namespace-js/core');
+import namespace from "@visualtools/namespace";
+// or: const namespace = require("@visualtools/namespace");
 
-// Auto-vivification: creates intermediate objects automatically
-const config = {};
-namespace(config, 'database.connections.primary');
-// config is now: { database: { connections: { primary: {} } } }
+const ctx = {};
 
-// Set values safely (refuses to overwrite by default)
-namespace.setValue(config, 'server.port', 3000);
-// namespace.setValue(config, 'server.port', 8080); // Throws! Already exists
-namespace.setValue(config, 'server.port', 8080, { overwrite: true }); // OK
+// Bare call: ensure a path exists as a plain object
+namespace(ctx, "app.config");
+// ctx is now { app: { config: {} } }
 
-// Check existence without creating
-if (namespace.exists(config, 'server.host')) {
-  console.log('Host is configured');
+// Create-only write (throws if path already holds something)
+namespace.set(ctx, "app.config.port", 3000);
+
+// Read — returns the value, or the NotFound sentinel if absent
+const val = namespace.get(ctx, "app.config.host");
+if (namespace.isNotFound(val)) {
+  console.log("host not configured yet");
 }
 
-// Get with fallback
-const port = namespace.getIfExists(config, 'server.port', {
-  defaultValueToReturn: 8080
-});
+// Read — throw if absent (great for fail-fast validation)
+const port = namespace.getMustExist(ctx, "app.config.port");
 
-// Require existence with custom error (great for API validation)
-const apiKey = namespace.getMustExist(process.env, 'API_KEY', {
-  errorMessage: 'Configuration error: API_KEY environment variable is required'
-});
+// Read — return a fallback if absent, never write
+const host = namespace.getOrDefault(ctx, "app.config.host", "localhost");
+
+// Convergence — write only if absent; return whichever now holds
+const cache = namespace.setOrDefault(ctx, "app.cache", new Map());
 ```
 
 ## Why namespace?
 
-### 1. NotFound Sentinel (Not `undefined`)
+**The verb name IS the contract.** Each call encodes a claim about what the rest of the codebase has promised at that point. When the claim is wrong, the error names the exact path and verb — no hunting through stack traces.
 
-Most libraries return `undefined` for missing paths. This conflates "not found" with "found undefined":
+**NotFound is not undefined.** `get()` returns a frozen sentinel for absent paths, so you can distinguish "not found" from "found and set to undefined". Most path libraries conflate these.
+
+**Safety by default.** `set()` refuses to overwrite. You must reach for the longer name (`setOverwrite`) to clobber — the verbosity is the signal that you mean it.
+
+## The bare call: `namespace(obj, path)`
+
+Ensures every segment of `path` exists as a plain object.
+
+- **Absent** — vivify as `{}`
+- **Plain object** — return it
+- **Anything else** (array, string, number, ...) — throw
 
 ```javascript
-// With lodash:
-const result = _.get(obj, 'path');
-if (result == null) { /* is it missing or explicitly null? */ }
+const ctx = {};
+const db = namespace(ctx, "services.database");
+// ctx is { services: { database: {} } }
+// db === ctx.services.database
 
-// With namespace:
-const result = namespace.getIfExists(obj, 'path');
-if (namespace.isNotFound(result)) {
-  // Definitely not found (not set at all)
-} else if (result === undefined) {
-  // Found, but value is explicitly undefined
-}
+// Idempotent — second call returns the same object
+namespace(ctx, "services.database") === db; // true
+
+// Collision detection — won't silently coerce non-objects
+ctx.services.cache = [1, 2, 3];
+namespace(ctx, "services.cache"); // throws: non-object value exists at "cache"
 ```
 
-### 2. Safety by Default
+## Read verbs
+
+Read verbs never write to the object.
+
+### `get(object, path)`
+
+Returns the value at path, or the `NotFound` sentinel if any segment is absent.
 
 ```javascript
-// Won't clobber existing data accidentally
-namespace.setValue(obj, 'existing.path', 'new value'); // Throws if exists!
-namespace.setValue(obj, 'existing.path', 'new value', { overwrite: true }); // Explicit opt-in
+namespace.get(obj, "a.b.c");           // value or NotFound
+namespace.isNotFound(result);          // true if absent
 ```
 
-### 3. Safe Defaults with `leafNode`
+### `getMustExist(object, path, options?)`
+
+Returns the value, or throws. Use for fail-fast validation.
 
 ```javascript
-// Initialize only if not exists (idempotent)
-const cache = namespace.leafNode(app, 'cache.users', new Map());
-// cache is app.cache.users — creates Map only if didn't exist
-```
-
-## For AI Agents & LLMs
-
-Perfect for managing structured output from language models and conversation state:
-
-```javascript
-// Build nested structures from LLM output
-const result = {};
-namespace.setValue(result, 'intent.type', 'greeting');
-namespace.setValue(result, 'entities.userName', 'Alice');
-
-// Safe access to optional fields
-const confidence = namespace.getIfExists(result, 'intent.confidence', {
-  defaultValueToReturn: 0.5
-});
-
-// Check if required fields exist before processing
-if (namespace.exists(result, 'entities.userName')) {
-  console.log(`Hello, ${result.entities.userName}!`);
-}
-```
-
-**Why agents love this library:**
-- **Never crashes** on missing paths (common with LLM outputs)
-- **Clear errors** — if `getMustExist` fails, you know exactly which path was missing
-- **Incremental building** — safely add fields as the conversation progresses
-- **Distinguishes "not set" from "set to undefined"** — crucial for partial updates
-
-See `AGENTS.md` for complete agent usage guide and patterns.
-
-## API Endpoint Pattern
-
-A common production pattern for REST API endpoints with validation, error handling, and standardized responses:
-
-```javascript
-function handleApiRequest(req, res, context) {
-  // Standard response envelope
-  const responseBody = {
-    success: false,
-    statusCode: 400,
-    errorMessage: 'Bad Request'
-  };
-  
-  try {
-    // Fail-fast validation with rich error context
-    // Error will include full path if missing: "app.config.database.url"
-    const dbUrl = namespace.getMustExist(
-      context,
-      'app.config.database.url',
-      { errorMessage: 'API Error: Database configuration missing' }
-    );
-    
-    // Validate required request fields
-    const userId = namespace.getMustExist(
-      req.body,
-      'userId',
-      { errorMessage: 'API Error: userId is required' }
-    );
-    
-    // Optional field with default
-    const includeMeta = namespace.getIfExists(
-      req.body,
-      'options.includeMeta',
-      { defaultValueToReturn: false }
-    );
-    
-    // Safe cache initialization
-    const cache = namespace.leafNode(context, 'cache.users', new Map());
-    
-    // Process request...
-    const result = { userId, dbUrl, includeMeta };
-    
-    // Success response
-    responseBody.results = result;
-    responseBody.statusCode = 200;
-    responseBody.success = true;
-    delete responseBody.errorMessage;
-    
-  } catch (error) {
-    // Error includes full namespace path for debugging
-    responseBody.errorMessage = error.message;
-    if (error.message.includes('Not Authorised')) {
-      responseBody.statusCode = 403;
-    }
-  }
-  
-  return res.status(responseBody.statusCode).json(responseBody);
-}
-```
-
-### Form Validation with Distinguishable Missing vs Null
-
-```javascript
-function validateField(applicationData, fieldName, fieldDef) {
-  const fieldValue = namespace.getIfExists(
-    applicationData, 
-    `fieldValues.${fieldName}`
-  );
-  
-  // Distinguish: not provided vs explicitly null
-  if (namespace.isNotFound(fieldValue)) {
-    return fieldDef.required ? `Field '${fieldName}' is required` : null;
-  }
-  
-  if (fieldValue === null && fieldDef.required && !fieldDef.allowNull) {
-    return `Field '${fieldName}' cannot be null`;
-  }
-  
-  // Field exists (even if empty string, 0, false)
-  return null;
-}
-```
-
-See `examples/api-endpoint.js` for a complete working example.
-
-## API
-
-### `namespace(object, address, defaultList?, checkExists?)`
-
-Get or create a namespace path, auto-vivifying intermediate objects.
-
-```javascript
-namespace({}, 'a.b.c');        // Returns {} and creates { a: { b: { c: {} } } }
-namespace(obj, 'a.b.c', null, true);  // Returns NotFound if doesn't exist
-```
-
-### `namespace.getIfExists(object, address, options?)`
-
-Get value or return `NotFound` sentinel.
-
-```javascript
-namespace.getIfExists(obj, 'a.b');
-namespace.getIfExists(obj, 'a.b', { defaultValueToReturn: 'fallback' });
-```
-
-### `namespace.getMustExist(object, address, options?)`
-
-Get value or throw error.
-
-```javascript
-namespace.getMustExist(obj, 'required.config');
-namespace.getMustExist(obj, 'required.config', {
-  errorMessage: 'Custom validation error for API'
+namespace.getMustExist(obj, "required.field");
+namespace.getMustExist(obj, "required.field", {
+  errorMessage: "Config error: field is required"
 });
 ```
 
-### `namespace.exists(object, address)`
+### `getOrDefault(object, path, standIn)`
 
-Check if path exists.
+Returns the value if present, otherwise `standIn`. Never writes.
 
 ```javascript
-if (namespace.exists(config, 'feature.enabled')) { ... }
+const timeout = namespace.getOrDefault(config, "http.timeout", 5000);
 ```
 
-### `namespace.setValue(object, address, value, options?)`
+### `getMustEmpty(object, path)`
 
-Set value at path. **Refuses to overwrite by default** (safety feature).
+Throws if a value is present at path. Use as a guard before writing to a slot you know is new.
 
 ```javascript
-namespace.setValue(obj, 'path', value);
-namespace.setValue(obj, 'path', value, { overwrite: true });
-namespace.setValue(obj, 'path', value, { dryRun: true }); // Validate only
-namespace.setValue(obj, 'path', value, { ignoreErrors: true }); // Silent fail
+namespace.getMustEmpty(obj, "slot.that.should.be.new");
+namespace.set(obj, "slot.that.should.be.new", value);
 ```
 
-### `namespace.remove(object, address)`
+## Write verbs
 
-Remove value at path.
+### `set(object, path, value)`
+
+Create-only. Writes value, throws if path already holds something. Auto-vivifies missing intermediates.
 
 ```javascript
-namespace.remove(obj, 'a.b.c');
+namespace.set(obj, "users.alice.role", "admin");
+namespace.set(obj, "users.alice.role", "user"); // throws: cannot overwrite
 ```
 
-### `namespace.leafNode(object, address, leafValue)`
+### `setMustExist(object, path, value)`
 
-Get or create leaf value — safe for initialization.
+Update-only. Writes value, throws if path is absent. Does NOT auto-vivify — the whole hierarchy must already exist.
 
 ```javascript
-// Sets only if doesn't exist
-const cache = namespace.leafNode(app, 'cache.users', new Map());
+namespace.setMustExist(obj, "users.alice.role", "user"); // update existing
 ```
 
-### `namespace.isNotFound(value)`
+### `setOrDefault(object, path, value)`
 
-Check if value is the NotFound sentinel.
+Convergence: writes value only if absent; returns whichever now holds. Auto-vivifies intermediates.
 
 ```javascript
-const result = namespace.getIfExists(obj, 'maybe.missing');
+// Many routes may initialize this — first one wins
+const db = namespace.setOrDefault(ctx, "connections.db", createPool());
+```
+
+### `setOverwrite(object, path, value, options?)`
+
+Unconditional write. Clobbers any existing value. Auto-vivifies intermediates.
+
+```javascript
+namespace.setOverwrite(obj, "status.updated", Date.now());
+
+// By default, throws if an intermediate is a non-object.
+// Pass { overwriteStructure: true } to clobber structure too.
+namespace.setOverwrite(obj, "a.b.c", 1, { overwriteStructure: true });
+```
+
+## Test verbs
+
+### `exists(object, path)`
+
+Returns `true` if the path holds any value — including `0`, `false`, `""`, `null`.
+
+```javascript
+if (namespace.exists(config, "feature.enabled")) { ... }
+```
+
+### `isNotFound(value)`
+
+Returns `true` if value is the `NotFound` sentinel.
+
+```javascript
+const result = namespace.get(obj, "maybe.missing");
 if (namespace.isNotFound(result)) { ... }
 ```
 
-### `namespace.join(...parts)`
+## Path algebra: `namespace.path`
 
-Join path components with dots.
-
-```javascript
-namespace.join('a', 'b', 'c');           // 'a.b.c'
-namespace.join('a', ['b', 'c']);         // 'a.b.c'
-```
-
-### `namespace.flatten(object)`
-
-Convert nested object to flat map.
+Pure string operations — no tree argument.
 
 ```javascript
-namespace.flatten({ a: { b: 'c' } });    // { 'a.b': 'c' }
+namespace.path.join("users", userId, "entries");
+// "users.alice.entries"
+
+namespace.path.join("a.b", ["c", "d"]);
+// "a.b.c.d"
+
+namespace.path.joinSlash("api", "v2", "users");
+// "api/v2/users"
+
+namespace.path.split("a.b.c");
+// ["a", "b", "c"]
+
+namespace.path.isRootOf("users.alice", "users.alice.entries");
+// true
+
+namespace.path.tween("a.b.c");
+// "a.children.b.children.c"
+
+namespace.path.tween("a.b.c", "items");
+// "a.items.b.items.c"
 ```
 
-### `namespace.expand(flatObject)`
+## Batch operations: `namespace.batch`
 
-Reverse of flatten.
+Multi-path contracts in one call.
 
 ```javascript
-namespace.expand({ 'a.b': 'c' });        // { a: { b: 'c' } }
-```
-
-## Browser Usage
-
-### Script Tag (UMD)
-
-```html
-<script src="https://unpkg.com/@namespace-js/core/dist/namespace.umd.js"></script>
-<script>
-  const config = {};
-  namespace(config, 'app.settings.theme', 'dark');
-</script>
-```
-
-### ESM Import
-
-```html
-<script type="module">
-  import namespace from 'https://unpkg.com/@namespace-js/core/dist/namespace.mjs';
-  const config = {};
-  namespace.setValue(config, 'app.ready', true);
-</script>
-```
-
-## TypeScript
-
-Full TypeScript definitions included:
-
-```typescript
-import namespace from '@namespace-js/core';
-
-interface Config {
-  server: { port: number };
-}
-
-const config: Config = {} as any;
-const port = namespace.getIfExists(config, 'server.port', {
-  defaultValueToReturn: 3000
+// Destructure from tree — throws if any path absent
+const { db, port } = namespace.batch.destructureMustExist(config, {
+  db:   "connections.database.url",
+  port: "server.port",
 });
+
+// Assert multiple paths exist — keyed by dotted path
+const vals = namespace.batch.allMustExist(config, [
+  "auth.secret",
+  "auth.issuer",
+]);
+
+// Extract: assert exists, delete from tree, return value
+const token = namespace.batch.extractMustExist(ctx, "pending.token");
 ```
 
-## Design Philosophy
+## Configuration
 
-1. **Safety by default** — `setValue` refuses to overwrite unless explicitly told to
-2. **Explicit > Implicit** — NotFound sentinel distinguishes "missing" from "undefined"
-3. **Fail fast** — `getMustExist` throws with meaningful errors
-4. **Zero dependencies** — No security concerns, tiny bundle size
+```javascript
+// Append object JSON to error messages (truncated at 200 chars)
+namespace.configure({ errorContext: true });
 
-If you want the underlying philosophy laid out plainly: [`docs/PHILOSOPHY.md`](./docs/PHILOSOPHY.md)
+namespace.getMustExist({}, "missing");
+// Error: namespace.getMustExist: property not found at "missing"
+//   object: {}
+```
 
-## For LLM/Code Generation
+## Design philosophy
 
-Using this library as a "lens" for AI code generation? See:
-- [`docs/LLM_LENS.md`](./docs/LLM_LENS.md) — Conceptual framework
-- [`docs/SYSTEM_PROMPT.md`](./docs/SYSTEM_PROMPT.md) — Copy-paste system prompt
+1. **The verb name is the contract** — `set` means create-only; `setOverwrite` means you intend to clobber
+2. **NotFound is not undefined** — the sentinel distinguishes absence from a stored `undefined`
+3. **Fail fast** — `MustExist` verbs throw with the exact path, not a silent `undefined`
+4. **Safety by default** — reaching for the destructive verb requires the longer name
+5. **Functions applied to data, never resident in it** — the tree is always plain `{}`
+6. **Zero dependencies**
 
-These resources teach LLMs to default to namespace patterns for all nested data operations.
+See `METALAND/` for the full applied philosophy.
 
 ## License
 
