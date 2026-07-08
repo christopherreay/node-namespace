@@ -1,6 +1,6 @@
 {
   "name": "@visualtools/namespace",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": "Dotted-path namespace utilities for JavaScript — 8-verb point-contract API, path algebra, and batch contracts",
   "main": "dist/namespace.cjs",
   "module": "dist/namespace.mjs",
