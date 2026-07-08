@@ -104,10 +104,10 @@ export function traverse(traversalContext: any): any {
 
 // ── read verbs ────────────────────────────────────────────────────────────────
 
-// get(object, path)
+// getIfExists(object, path)
 // Returns the value at path, or the NotFound sentinel if any segment is absent.
 // Never writes.
-export function get(object: any, path: string): any {
+export function getIfExists(object: any, path: string): any {
   const traversalContext = {
     object,
     address: path,
@@ -130,7 +130,7 @@ export function get(object: any, path: string): any {
 // Returns the value, or throws (opts.errorMessage if given).
 // Never writes.
 export function getMustExist(object: any, path: string, options?: { errorMessage?: string }): any {
-  const foundValue_probed = get(object, path);
+  const foundValue_probed = getIfExists(object, path);
   if (foundValue_probed === NotFound) {
     const baseMessage =
       (options && options.errorMessage) ||
@@ -144,7 +144,7 @@ export function getMustExist(object: any, path: string, options?: { errorMessage
 // Throws if a value is present at path.  Returns nothing useful.
 // Use as a guard on its own line before writing to a slot you know is new.
 export function getMustEmpty(object: any, path: string): void {
-  const foundValue_probed = get(object, path);
+  const foundValue_probed = getIfExists(object, path);
   if (foundValue_probed !== NotFound) {
     throw new Error(buildErrorMessage(
       `namespace.getMustEmpty: path must be empty but value found at "${path}"`,
@@ -157,17 +157,17 @@ export function getMustEmpty(object: any, path: string): void {
 // Returns the stored value, or standIn if absent.  standIn is a required
 // positional argument — if you want the sentinel, use get().  Never writes.
 export function getOrDefault(object: any, path: string, standIn: any): any {
-  const foundValue_probed = get(object, path);
+  const foundValue_probed = getIfExists(object, path);
   return foundValue_probed === NotFound ? standIn : foundValue_probed;
 }
 
 // ── write verbs ───────────────────────────────────────────────────────────────
 
-// set(object, path, value)
+// setNotExists(object, path, value)
 // Create-only: writes value, throws if path already holds something.
 // Auto-vivifies missing intermediate objects.
-export function set(object: any, path: string, valueToSet: any): any {
-  if (path === null) throw new Error("namespace.set: path cannot be null");
+export function setNotExists(object: any, path: string, valueToSet: any): any {
+  if (path === null) throw new Error("namespace.setNotExists: path cannot be null");
 
   const traversalContext = {
     object,
@@ -179,7 +179,7 @@ export function set(object: any, path: string, valueToSet: any): any {
           pathStep.next = pathStep.current[pathStep.addressComponent] = {};
         } else if (!isObject(pathStep.next)) {
           throw new Error(buildErrorMessage(
-            `namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
+            `namespace.setNotExists: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`,
             object
           ));
         }
@@ -313,7 +313,7 @@ export function setOverwrite(object: any, path: string, valueToSet: any, options
 // exists(object, path)
 // Returns true iff the path holds something — including 0, false, "", null.
 export function exists(object: any, path: string): boolean {
-  return get(object, path) !== NotFound;
+  return getIfExists(object, path) !== NotFound;
 }
 
 // isNotFound(value)
@@ -437,7 +437,7 @@ export const batch: {
       delete object[leafKey];
     } else {
       const parentPath_namespace = segments_list.slice(0, -1).join(".");
-      const parent_probed        = get(object, parentPath_namespace);
+      const parent_probed        = getIfExists(object, parentPath_namespace);
       if (parent_probed !== NotFound && isObject(parent_probed)) {
         delete (parent_probed as any)[leafKey];
       }
@@ -446,6 +446,45 @@ export const batch: {
   },
 
 };
+
+// ── remove verbs ─────────────────────────────────────────────────────────────
+
+// rm(object, path)
+// Remove the value at path if present; no-op if absent.
+// Returns the removed value, or NotFound if the path was absent.
+export function rm(object: any, path: string): any {
+  const segments = path.split(".");
+  const leafKey = segments[segments.length - 1];
+
+  if (segments.length === 1) {
+    if (!Object.prototype.hasOwnProperty.call(object, leafKey)) return NotFound;
+    const value = object[leafKey];
+    delete object[leafKey];
+    return value;
+  }
+
+  const parentPath = segments.slice(0, -1).join(".");
+  const parent = getIfExists(object, parentPath);
+  if (parent === NotFound || !isObject(parent)) return NotFound;
+  if (!Object.prototype.hasOwnProperty.call(parent, leafKey)) return NotFound;
+  const value = (parent as any)[leafKey];
+  delete (parent as any)[leafKey];
+  return value;
+}
+
+// rmMustExist(object, path)
+// Remove the value at path. Throws if the path is absent.
+// Returns the removed value.
+export function rmMustExist(object: any, path: string): any {
+  const result = rm(object, path);
+  if (result === NotFound) {
+    throw new Error(buildErrorMessage(
+      `namespace.rmMustExist: path does not exist: "${path}"`,
+      object
+    ));
+  }
+  return result;
+}
 
 // ── bare namespace() ─────────────────────────────────────────────────────────
 //
@@ -498,14 +537,16 @@ function namespaceEnsure(object: any, dottedPath: string): object {
 type Namespace = typeof namespaceEnsure & {
   NotFound: Readonly<{ namespaceFunctionConstant: "NotFound" }>;
   configure: typeof configure;
-  get: typeof get;
+  getIfExists: typeof getIfExists;
   getMustExist: typeof getMustExist;
   getMustEmpty: typeof getMustEmpty;
   getOrDefault: typeof getOrDefault;
-  set: typeof set;
+  setNotExists: typeof setNotExists;
   setMustExist: typeof setMustExist;
   setOrDefault: typeof setOrDefault;
   setOverwrite: typeof setOverwrite;
+  rm: typeof rm;
+  rmMustExist: typeof rmMustExist;
   exists: typeof exists;
   isNotFound: typeof isNotFound;
   traverse: typeof traverse;
@@ -516,14 +557,16 @@ type Namespace = typeof namespaceEnsure & {
 const namespace: Namespace = Object.assign(namespaceEnsure, {
   NotFound,
   configure,
-  get,
+  getIfExists,
   getMustExist,
   getMustEmpty,
   getOrDefault,
-  set,
+  setNotExists,
   setMustExist,
   setOrDefault,
   setOverwrite,
+  rm,
+  rmMustExist,
   exists,
   isNotFound,
   traverse,

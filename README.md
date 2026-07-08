@@ -25,10 +25,10 @@ namespace(ctx, "app.config");
 // ctx is now { app: { config: {} } }
 
 // Create-only write (throws if path already holds something)
-namespace.set(ctx, "app.config.port", 3000);
+namespace.setNotExists(ctx, "app.config.port", 3000);
 
 // Read — returns the value, or the NotFound sentinel if absent
-const val = namespace.get(ctx, "app.config.host");
+const val = namespace.getIfExists(ctx, "app.config.host");
 if (namespace.isNotFound(val)) {
   console.log("host not configured yet");
 }
@@ -47,9 +47,9 @@ const cache = namespace.setOrDefault(ctx, "app.cache", new Map());
 
 **The verb name IS the contract.** Each call encodes a claim about what the rest of the codebase has promised at that point. When the claim is wrong, the error names the exact path and verb — no hunting through stack traces.
 
-**NotFound is not undefined.** `get()` returns a frozen sentinel for absent paths, so you can distinguish "not found" from "found and set to undefined". Most path libraries conflate these.
+**NotFound is not undefined.** `getIfExists()` returns a frozen sentinel for absent paths, so you can distinguish "not found" from "found and set to undefined". Most path libraries conflate these.
 
-**Safety by default.** `set()` refuses to overwrite. You must reach for the longer name (`setOverwrite`) to clobber — the verbosity is the signal that you mean it.
+**Safety by default.** `setNotExists()` refuses to overwrite. You must reach for the longer name (`setOverwrite`) to clobber — the verbosity is the signal that you mean it.
 
 ## The bare call: `namespace(obj, path)`
 
@@ -77,12 +77,12 @@ namespace(ctx, "services.cache"); // throws: non-object value exists at "cache"
 
 Read verbs never write to the object.
 
-### `get(object, path)`
+### `getIfExists(object, path)`
 
 Returns the value at path, or the `NotFound` sentinel if any segment is absent.
 
 ```javascript
-namespace.get(obj, "a.b.c");           // value or NotFound
+namespace.getIfExists(obj, "a.b.c");   // value or NotFound
 namespace.isNotFound(result);          // true if absent
 ```
 
@@ -111,18 +111,18 @@ Throws if a value is present at path. Use as a guard before writing to a slot yo
 
 ```javascript
 namespace.getMustEmpty(obj, "slot.that.should.be.new");
-namespace.set(obj, "slot.that.should.be.new", value);
+namespace.setNotExists(obj, "slot.that.should.be.new", value);
 ```
 
 ## Write verbs
 
-### `set(object, path, value)`
+### `setNotExists(object, path, value)`
 
 Create-only. Writes value, throws if path already holds something. Auto-vivifies missing intermediates.
 
 ```javascript
-namespace.set(obj, "users.alice.role", "admin");
-namespace.set(obj, "users.alice.role", "user"); // throws: cannot overwrite
+namespace.setNotExists(obj, "users.alice.role", "admin");
+namespace.setNotExists(obj, "users.alice.role", "user"); // throws: cannot overwrite
 ```
 
 ### `setMustExist(object, path, value)`
@@ -169,8 +169,29 @@ if (namespace.exists(config, "feature.enabled")) { ... }
 Returns `true` if value is the `NotFound` sentinel.
 
 ```javascript
-const result = namespace.get(obj, "maybe.missing");
+const result = namespace.getIfExists(obj, "maybe.missing");
 if (namespace.isNotFound(result)) { ... }
+```
+
+## Remove verbs
+
+### `rm(object, path)`
+
+Removes the value at path. No-op if absent. Returns the removed value, or `NotFound` if the path was absent.
+
+```javascript
+const old = namespace.rm(obj, "temp.token");
+if (!namespace.isNotFound(old)) {
+  console.log("removed:", old);
+}
+```
+
+### `rmMustExist(object, path)`
+
+Removes the value at path. Throws if absent. Returns the removed value.
+
+```javascript
+const token = namespace.rmMustExist(ctx, "pending.token");
 ```
 
 ## Path algebra: `namespace.path`
@@ -234,7 +255,7 @@ namespace.getMustExist({}, "missing");
 
 ## Design philosophy
 
-1. **The verb name is the contract** — `set` means create-only; `setOverwrite` means you intend to clobber
+1. **The verb name is the contract** — `setNotExists` means create-only; `setOverwrite` means you intend to clobber
 2. **NotFound is not undefined** — the sentinel distinguishes absence from a stored `undefined`
 3. **Fail fast** — `MustExist` verbs throw with the exact path, not a silent `undefined`
 4. **Safety by default** — reaching for the destructive verb requires the longer name

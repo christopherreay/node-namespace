@@ -94,10 +94,10 @@
         }
     }
     // ── read verbs ────────────────────────────────────────────────────────────────
-    // get(object, path)
+    // getIfExists(object, path)
     // Returns the value at path, or the NotFound sentinel if any segment is absent.
     // Never writes.
-    function get(object, path) {
+    function getIfExists(object, path) {
         const traversalContext = {
             object,
             address: path,
@@ -120,7 +120,7 @@
     // Returns the value, or throws (opts.errorMessage if given).
     // Never writes.
     function getMustExist(object, path, options) {
-        const foundValue_probed = get(object, path);
+        const foundValue_probed = getIfExists(object, path);
         if (foundValue_probed === NotFound) {
             const baseMessage = (options && options.errorMessage) ||
                 `namespace.getMustExist: property not found at "${path}"`;
@@ -132,7 +132,7 @@
     // Throws if a value is present at path.  Returns nothing useful.
     // Use as a guard on its own line before writing to a slot you know is new.
     function getMustEmpty(object, path) {
-        const foundValue_probed = get(object, path);
+        const foundValue_probed = getIfExists(object, path);
         if (foundValue_probed !== NotFound) {
             throw new Error(buildErrorMessage(`namespace.getMustEmpty: path must be empty but value found at "${path}"`, object));
         }
@@ -141,16 +141,16 @@
     // Returns the stored value, or standIn if absent.  standIn is a required
     // positional argument — if you want the sentinel, use get().  Never writes.
     function getOrDefault(object, path, standIn) {
-        const foundValue_probed = get(object, path);
+        const foundValue_probed = getIfExists(object, path);
         return foundValue_probed === NotFound ? standIn : foundValue_probed;
     }
     // ── write verbs ───────────────────────────────────────────────────────────────
-    // set(object, path, value)
+    // setNotExists(object, path, value)
     // Create-only: writes value, throws if path already holds something.
     // Auto-vivifies missing intermediate objects.
-    function set(object, path, valueToSet) {
+    function setNotExists(object, path, valueToSet) {
         if (path === null)
-            throw new Error("namespace.set: path cannot be null");
+            throw new Error("namespace.setNotExists: path cannot be null");
         const traversalContext = {
             object,
             address: path,
@@ -161,7 +161,7 @@
                         pathStep.next = pathStep.current[pathStep.addressComponent] = {};
                     }
                     else if (!isObject(pathStep.next)) {
-                        throw new Error(buildErrorMessage(`namespace.set: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`, object));
+                        throw new Error(buildErrorMessage(`namespace.setNotExists: cannot traverse through non-object at "${pathStep.addressComponent}" on path "${path}"`, object));
                     }
                 }
                 else {
@@ -281,7 +281,7 @@
     // exists(object, path)
     // Returns true iff the path holds something — including 0, false, "", null.
     function exists(object, path) {
-        return get(object, path) !== NotFound;
+        return getIfExists(object, path) !== NotFound;
     }
     // isNotFound(value)
     // Returns true iff value is the NotFound sentinel returned by get().
@@ -386,7 +386,7 @@
             }
             else {
                 const parentPath_namespace = segments_list.slice(0, -1).join(".");
-                const parent_probed = get(object, parentPath_namespace);
+                const parent_probed = getIfExists(object, parentPath_namespace);
                 if (parent_probed !== NotFound && isObject(parent_probed)) {
                     delete parent_probed[leafKey];
                 }
@@ -394,6 +394,40 @@
             return foundValue;
         },
     };
+    // ── remove verbs ─────────────────────────────────────────────────────────────
+    // rm(object, path)
+    // Remove the value at path if present; no-op if absent.
+    // Returns the removed value, or NotFound if the path was absent.
+    function rm(object, path) {
+        const segments = path.split(".");
+        const leafKey = segments[segments.length - 1];
+        if (segments.length === 1) {
+            if (!Object.prototype.hasOwnProperty.call(object, leafKey))
+                return NotFound;
+            const value = object[leafKey];
+            delete object[leafKey];
+            return value;
+        }
+        const parentPath = segments.slice(0, -1).join(".");
+        const parent = getIfExists(object, parentPath);
+        if (parent === NotFound || !isObject(parent))
+            return NotFound;
+        if (!Object.prototype.hasOwnProperty.call(parent, leafKey))
+            return NotFound;
+        const value = parent[leafKey];
+        delete parent[leafKey];
+        return value;
+    }
+    // rmMustExist(object, path)
+    // Remove the value at path. Throws if the path is absent.
+    // Returns the removed value.
+    function rmMustExist(object, path) {
+        const result = rm(object, path);
+        if (result === NotFound) {
+            throw new Error(buildErrorMessage(`namespace.rmMustExist: path does not exist: "${path}"`, object));
+        }
+        return result;
+    }
     // ── bare namespace() ─────────────────────────────────────────────────────────
     //
     // namespace(object, path)
@@ -439,14 +473,16 @@
     const namespace = Object.assign(namespaceEnsure, {
         NotFound,
         configure,
-        get,
+        getIfExists,
         getMustExist,
         getMustEmpty,
         getOrDefault,
-        set,
+        setNotExists,
         setMustExist,
         setOrDefault,
         setOverwrite,
+        rm,
+        rmMustExist,
         exists,
         isNotFound,
         traverse,
@@ -459,14 +495,16 @@
     exports.configure = configure;
     exports.default = namespace;
     exports.exists = exists;
-    exports.get = get;
+    exports.getIfExists = getIfExists;
     exports.getMustEmpty = getMustEmpty;
     exports.getMustExist = getMustExist;
     exports.getOrDefault = getOrDefault;
     exports.isNotFound = isNotFound;
     exports.path = path;
-    exports.set = set;
+    exports.rm = rm;
+    exports.rmMustExist = rmMustExist;
     exports.setMustExist = setMustExist;
+    exports.setNotExists = setNotExists;
     exports.setOrDefault = setOrDefault;
     exports.setOverwrite = setOverwrite;
     exports.traverse = traverse;

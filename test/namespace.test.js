@@ -85,8 +85,8 @@ describe("bare namespace()", () => {
   });
 
   it("verbs still accessible on the function", () => {
-    assert.equal(typeof namespace.get, "function");
-    assert.equal(typeof namespace.set, "function");
+    assert.equal(typeof namespace.getIfExists, "function");
+    assert.equal(typeof namespace.setNotExists, "function");
     assert.equal(typeof namespace.exists, "function");
   });
 });
@@ -111,53 +111,53 @@ describe("NotFound sentinel", () => {
   });
 });
 
-// ── get ───────────────────────────────────────────────────────────────────────
+// ── getIfExists ───────────────────────────────────────────────────────────────
 
-describe("get()", () => {
+describe("getIfExists()", () => {
   it("returns the value at a present path", () => {
-    assert.equal(namespace.get({ a: { b: 42 } }, "a.b"), 42);
+    assert.equal(namespace.getIfExists({ a: { b: 42 } }, "a.b"), 42);
   });
 
   it("returns NotFound for an absent path", () => {
-    assert.equal(namespace.get({}, "a.b"), NotFound);
+    assert.equal(namespace.getIfExists({}, "a.b"), NotFound);
   });
 
   it("returns NotFound when an intermediate segment is absent", () => {
-    assert.equal(namespace.get({ a: {} }, "a.b.c"), NotFound);
+    assert.equal(namespace.getIfExists({ a: {} }, "a.b.c"), NotFound);
   });
 
   it("returns NotFound when an intermediate is null", () => {
-    assert.equal(namespace.get({ a: null }, "a.b"), NotFound);
+    assert.equal(namespace.getIfExists({ a: null }, "a.b"), NotFound);
   });
 
   it("returns NotFound when an intermediate is a primitive", () => {
-    assert.equal(namespace.get({ a: 5 }, "a.b"), NotFound);
+    assert.equal(namespace.getIfExists({ a: 5 }, "a.b"), NotFound);
   });
 
   it("returns the value for all falsy stored values (0, false, '', null)", () => {
-    assert.equal(namespace.get({ v: 0    }, "v"), 0);
-    assert.equal(namespace.get({ v: false }, "v"), false);
-    assert.equal(namespace.get({ v: ""   }, "v"), "");
-    assert.equal(namespace.get({ v: null }, "v"), null);
+    assert.equal(namespace.getIfExists({ v: 0    }, "v"), 0);
+    assert.equal(namespace.getIfExists({ v: false }, "v"), false);
+    assert.equal(namespace.getIfExists({ v: ""   }, "v"), "");
+    assert.equal(namespace.getIfExists({ v: null }, "v"), null);
   });
 
   it("returns undefined for a stored undefined (key present, value undefined)", () => {
     const obj = { a: undefined };
-    const result = namespace.get(obj, "a");
+    const result = namespace.getIfExists(obj, "a");
     assert.equal(result, undefined);
     assert.equal(namespace.isNotFound(result), false);
   });
 
   it("never writes to the object", () => {
     const obj = { a: 1 };
-    namespace.get(obj, "b");
+    namespace.getIfExists(obj, "b");
     assert.deepEqual(obj, { a: 1 });
   });
 
   it("throws on a non-object root", () => {
-    assert.throws(() => namespace.get(null, "a"), /namespace/);
-    assert.throws(() => namespace.get(undefined, "a"), /namespace/);
-    assert.throws(() => namespace.get("string", "a"), /namespace/);
+    assert.throws(() => namespace.getIfExists(null, "a"), /namespace/);
+    assert.throws(() => namespace.getIfExists(undefined, "a"), /namespace/);
+    assert.throws(() => namespace.getIfExists("string", "a"), /namespace/);
   });
 });
 
@@ -282,50 +282,50 @@ describe("exists()", () => {
   });
 });
 
-// ── set ───────────────────────────────────────────────────────────────────────
+// ── setNotExists ──────────────────────────────────────────────────────────────
 
-describe("set()", () => {
+describe("setNotExists()", () => {
   it("writes a value at a new path", () => {
     const obj = {};
-    namespace.set(obj, "a.b", 42);
+    namespace.setNotExists(obj, "a.b", 42);
     assert.equal(obj.a.b, 42);
   });
 
   it("returns the written value", () => {
     const obj = {};
-    const result = namespace.set(obj, "a", "hello");
+    const result = namespace.setNotExists(obj, "a", "hello");
     assert.equal(result, "hello");
   });
 
   it("auto-vivifies missing intermediate objects", () => {
     const obj = {};
-    namespace.set(obj, "a.b.c.d", "deep");
+    namespace.setNotExists(obj, "a.b.c.d", "deep");
     assert.deepEqual(obj, { a: { b: { c: { d: "deep" } } } });
   });
 
   it("throws if the path already holds a value", () => {
-    assert.throws(() => namespace.set({ a: 1 }, "a", 2), /cannot overwrite/);
+    assert.throws(() => namespace.setNotExists({ a: 1 }, "a", 2), /cannot overwrite/);
   });
 
   it("throws even when the existing value is falsy (0 is present)", () => {
-    assert.throws(() => namespace.set({ a: 0 }, "a", 1), /cannot overwrite/);
+    assert.throws(() => namespace.setNotExists({ a: 0 }, "a", 1), /cannot overwrite/);
   });
 
   it("throws if an intermediate segment is a primitive", () => {
-    assert.throws(() => namespace.set({ a: 5 }, "a.b", 1), /non-object/);
+    assert.throws(() => namespace.setNotExists({ a: 5 }, "a.b", 1), /non-object/);
   });
 
   it("throws for null path", () => {
-    assert.throws(() => namespace.set({}, null, 1), /path cannot be null/);
+    assert.throws(() => namespace.setNotExists({}, null, 1), /path cannot be null/);
   });
 
   it("writes various value types", () => {
     const obj = {};
-    namespace.set(obj, "str",  "hello");
-    namespace.set(obj, "num",  0);
-    namespace.set(obj, "bool", false);
-    namespace.set(obj, "nil",  null);
-    namespace.set(obj, "arr",  [1, 2]);
+    namespace.setNotExists(obj, "str",  "hello");
+    namespace.setNotExists(obj, "num",  0);
+    namespace.setNotExists(obj, "bool", false);
+    namespace.setNotExists(obj, "nil",  null);
+    namespace.setNotExists(obj, "arr",  [1, 2]);
     assert.equal(obj.str, "hello");
     assert.equal(obj.num, 0);
     assert.equal(obj.bool, false);
@@ -455,6 +455,50 @@ describe("setOverwrite()", () => {
   });
 });
 
+// ── rm ────────────────────────────────────────────────────────────────────────
+
+describe("rm()", () => {
+  it("removes and returns a present value", () => {
+    const obj = { a: { b: 42 } };
+    const result = namespace.rm(obj, "a.b");
+    assert.equal(result, 42);
+    assert.deepStrictEqual(obj, { a: {} });
+  });
+
+  it("returns NotFound for absent path", () => {
+    const obj = { a: {} };
+    const result = namespace.rm(obj, "a.b");
+    assert.equal(namespace.isNotFound(result), true);
+  });
+
+  it("removes a top-level key", () => {
+    const obj = { x: "hello" };
+    const result = namespace.rm(obj, "x");
+    assert.equal(result, "hello");
+    assert.deepStrictEqual(obj, {});
+  });
+
+  it("returns NotFound when intermediate is missing", () => {
+    const obj = {};
+    const result = namespace.rm(obj, "a.b.c");
+    assert.equal(namespace.isNotFound(result), true);
+  });
+});
+
+describe("rmMustExist()", () => {
+  it("removes and returns a present value", () => {
+    const obj = { a: { b: "val" } };
+    const result = namespace.rmMustExist(obj, "a.b");
+    assert.equal(result, "val");
+    assert.deepStrictEqual(obj, { a: {} });
+  });
+
+  it("throws when path is absent", () => {
+    const obj = { a: {} };
+    assert.throws(() => namespace.rmMustExist(obj, "a.b"), /path does not exist/);
+  });
+});
+
 // ── convergence pattern ───────────────────────────────────────────────────────
 
 describe("convergence pattern (setOrDefault load-once)", () => {
@@ -489,7 +533,7 @@ describe("build-forward response pattern", () => {
     function handleRequest(request) {
       const responseBody = { success: false, statusCode: 400 };
 
-      const entryText = namespace.get(request, "body.entryText");
+      const entryText = namespace.getIfExists(request, "body.entryText");
       if (namespace.isNotFound(entryText)) {
         responseBody.errorMessage = "entryText";
         return responseBody;
@@ -498,7 +542,7 @@ describe("build-forward response pattern", () => {
       responseBody.statusCode = 500;
       try {
         if (request.body.__forceFailure) throw new Error("forced failure");
-        namespace.set(responseBody, "results.entry", { id: 1, entryText });
+        namespace.setNotExists(responseBody, "results.entry", { id: 1, entryText });
         responseBody.statusCode = 200;
         responseBody.success    = true;
       } catch (error) {
@@ -792,8 +836,9 @@ describe("namespace.configure()", () => {
 describe("namespace exports", () => {
   const verbs = [
     "configure",
-    "get", "getMustExist", "getMustEmpty", "getOrDefault",
-    "set", "setMustExist", "setOrDefault", "setOverwrite",
+    "getIfExists", "getMustExist", "getMustEmpty", "getOrDefault",
+    "setNotExists", "setMustExist", "setOrDefault", "setOverwrite",
+    "rm", "rmMustExist",
     "exists", "isNotFound",
   ];
 
