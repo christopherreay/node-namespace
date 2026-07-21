@@ -182,6 +182,18 @@ function requireCore () {
 	  return foundValue_probed === NotFound ? standIn : foundValue_probed;
 	}
 
+	getOrDefault.syncFunc = function syncFunc(object, path, fn) {
+	  const foundValue_probed = getIfExists(object, path);
+	  if (foundValue_probed !== NotFound) return foundValue_probed;
+	  return fn();
+	};
+
+	getOrDefault.asyncFunc = async function asyncFunc(object, path, fn) {
+	  const foundValue_probed = getIfExists(object, path);
+	  if (foundValue_probed !== NotFound) return foundValue_probed;
+	  return await fn();
+	};
+
 	// ── write verbs ───────────────────────────────────────────────────────────────
 
 	// setNotExists(object, path, value)
@@ -295,6 +307,19 @@ function requireCore () {
 	  traverse(traversalContext);
 	  return traversalContext.toReturn;
 	}
+
+	setOrDefault.syncFunc = function syncFunc(object, path, fn) {
+	  const foundValue_probed = getIfExists(object, path);
+	  if (foundValue_probed !== NotFound) return foundValue_probed;
+	  return setOrDefault(object, path, fn());
+	};
+
+	setOrDefault.asyncFunc = async function asyncFunc(object, path, fn) {
+	  const foundValue_probed = getIfExists(object, path);
+	  if (foundValue_probed !== NotFound) return foundValue_probed;
+	  const resolved = await fn();
+	  return setOrDefault(object, path, resolved);
+	};
 
 	// setOverwrite(object, path, value, options?)
 	// Writes unconditionally, clobbering any existing leaf value.

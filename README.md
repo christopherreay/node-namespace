@@ -105,6 +105,22 @@ Returns the value if present, otherwise `standIn`. Never writes.
 const timeout = namespace.getOrDefault(config, "http.timeout", 5000);
 ```
 
+#### `getOrDefault.syncFunc(object, path, fn)`
+
+Like `getOrDefault`, but calls `fn()` only when absent. Never writes.
+
+```javascript
+const config = namespace.getOrDefault.syncFunc(ctx, "app.config", () => loadConfig());
+```
+
+#### `getOrDefault.asyncFunc(object, path, fn)`
+
+Like `getOrDefault`, but calls `async fn()` only when absent. Always returns a promise. Never writes.
+
+```javascript
+const config = await namespace.getOrDefault.asyncFunc(ctx, "app.config", () => fetchConfig());
+```
+
 ### `getMustEmpty(object, path)`
 
 Throws if a value is present at path. Use as a guard before writing to a slot you know is new.
@@ -140,6 +156,22 @@ Convergence: writes value only if absent; returns whichever now holds. Auto-vivi
 ```javascript
 // Many routes may initialize this — first one wins
 const db = namespace.setOrDefault(ctx, "connections.db", createPool());
+```
+
+#### `setOrDefault.syncFunc(object, path, fn)`
+
+Like `setOrDefault`, but calls `fn()` only when absent. Writes the result.
+
+```javascript
+const pool = namespace.setOrDefault.syncFunc(ctx, "db.pool", () => createPool());
+```
+
+#### `setOrDefault.asyncFunc(object, path, fn)`
+
+Like `setOrDefault`, but calls `async fn()` only when absent. Awaits, writes, returns a promise.
+
+```javascript
+const pool = await namespace.setOrDefault.asyncFunc(ctx, "db.pool", () => connectAsync());
 ```
 
 ### `setOverwrite(object, path, value, options?)`

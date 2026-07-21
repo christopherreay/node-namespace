@@ -144,6 +144,23 @@
         const foundValue_probed = getIfExists(object, path);
         return foundValue_probed === NotFound ? standIn : foundValue_probed;
     }
+    // getOrDefault.syncFunc(object, path, fn)
+    // Like getOrDefault, but calls fn() only when absent.  Never writes.
+    getOrDefault.syncFunc = function syncFunc(object, path, fn) {
+        const foundValue_probed = getIfExists(object, path);
+        if (foundValue_probed !== NotFound)
+            return foundValue_probed;
+        return fn();
+    };
+    // getOrDefault.asyncFunc(object, path, fn)
+    // Like getOrDefault, but calls async fn() only when absent.  Never writes.
+    // Always returns a promise.
+    getOrDefault.asyncFunc = async function asyncFunc(object, path, fn) {
+        const foundValue_probed = getIfExists(object, path);
+        if (foundValue_probed !== NotFound)
+            return foundValue_probed;
+        return await fn();
+    };
     // ── write verbs ───────────────────────────────────────────────────────────────
     // setNotExists(object, path, value)
     // Create-only: writes value, throws if path already holds something.
@@ -242,6 +259,24 @@
         traverse(traversalContext);
         return traversalContext.toReturn;
     }
+    // setOrDefault.syncFunc(object, path, fn)
+    // Like setOrDefault, but calls fn() only when absent.  Writes the result.
+    setOrDefault.syncFunc = function syncFunc(object, path, fn) {
+        const foundValue_probed = getIfExists(object, path);
+        if (foundValue_probed !== NotFound)
+            return foundValue_probed;
+        return setOrDefault(object, path, fn());
+    };
+    // setOrDefault.asyncFunc(object, path, fn)
+    // Like setOrDefault, but calls async fn() only when absent.
+    // Awaits the result, writes it, returns a promise.
+    setOrDefault.asyncFunc = async function asyncFunc(object, path, fn) {
+        const foundValue_probed = getIfExists(object, path);
+        if (foundValue_probed !== NotFound)
+            return foundValue_probed;
+        const resolved = await fn();
+        return setOrDefault(object, path, resolved);
+    };
     // setOverwrite(object, path, value)
     // Writes unconditionally, clobbering any existing value.
     // Auto-vivifies missing intermediate objects.

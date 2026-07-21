@@ -255,6 +255,52 @@ describe("getOrDefault()", () => {
   });
 });
 
+// ── getOrDefault.syncFunc / asyncFunc ─────────────────────────────────────────
+
+describe("getOrDefault.syncFunc()", () => {
+  it("calls fn and returns result when path is absent", () => {
+    const obj = {};
+    const result = namespace.getOrDefault.syncFunc(obj, "a.b", () => 42);
+    assert.equal(result, 42);
+  });
+
+  it("returns existing value without calling fn when path is present", () => {
+    let called = 0;
+    const obj = { a: "exists" };
+    const result = namespace.getOrDefault.syncFunc(obj, "a", () => { called++; return "nope"; });
+    assert.equal(result, "exists");
+    assert.equal(called, 0);
+  });
+
+  it("never writes to the object", () => {
+    const obj = {};
+    namespace.getOrDefault.syncFunc(obj, "a.b", () => "val");
+    assert.deepEqual(obj, {});
+  });
+});
+
+describe("getOrDefault.asyncFunc()", () => {
+  it("calls async fn and returns resolved value when path is absent", async () => {
+    const obj = {};
+    const result = await namespace.getOrDefault.asyncFunc(obj, "a", async () => 99);
+    assert.equal(result, 99);
+  });
+
+  it("returns existing value without calling fn when path is present", async () => {
+    let called = 0;
+    const obj = { a: "exists" };
+    const result = await namespace.getOrDefault.asyncFunc(obj, "a", async () => { called++; return "nope"; });
+    assert.equal(result, "exists");
+    assert.equal(called, 0);
+  });
+
+  it("never writes to the object", async () => {
+    const obj = {};
+    await namespace.getOrDefault.asyncFunc(obj, "a.b", async () => "val");
+    assert.deepEqual(obj, {});
+  });
+});
+
 // ── exists ────────────────────────────────────────────────────────────────────
 
 describe("exists()", () => {
@@ -412,6 +458,49 @@ describe("setOrDefault()", () => {
 
   it("throws for null path", () => {
     assert.throws(() => namespace.setOrDefault({}, null, 1), /path cannot be null/);
+  });
+});
+
+// ── setOrDefault.syncFunc / asyncFunc ─────────────────────────────────────────
+
+describe("setOrDefault.syncFunc()", () => {
+  it("calls fn, writes, and returns result when path is absent", () => {
+    const obj = {};
+    const result = namespace.setOrDefault.syncFunc(obj, "a.b", () => 42);
+    assert.equal(result, 42);
+    assert.equal(obj.a.b, 42);
+  });
+
+  it("returns existing value without calling fn when path is present", () => {
+    let called = 0;
+    const obj = { a: "exists" };
+    const result = namespace.setOrDefault.syncFunc(obj, "a", () => { called++; return "nope"; });
+    assert.equal(result, "exists");
+    assert.equal(called, 0);
+  });
+
+  it("writes sync value to tree", () => {
+    const obj = {};
+    const result = namespace.setOrDefault.syncFunc(obj, "x", () => "sync");
+    assert.equal(result, "sync");
+    assert.equal(obj.x, "sync");
+  });
+});
+
+describe("setOrDefault.asyncFunc()", () => {
+  it("calls async fn, writes resolved value, and returns it", async () => {
+    const obj = {};
+    const result = await namespace.setOrDefault.asyncFunc(obj, "a", async () => "async-val");
+    assert.equal(result, "async-val");
+    assert.equal(obj.a, "async-val");
+  });
+
+  it("returns existing value without calling fn when path is present", async () => {
+    let called = 0;
+    const obj = { a: "exists" };
+    const result = await namespace.setOrDefault.asyncFunc(obj, "a", async () => { called++; return "nope"; });
+    assert.equal(result, "exists");
+    assert.equal(called, 0);
   });
 });
 
