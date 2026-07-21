@@ -1,6 +1,6 @@
 {
   "name": "@visualtools/namespace",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Dotted-path namespace utilities for JavaScript — 8-verb point-contract API, path algebra, and batch contracts",
   "main": "dist/namespace.cjs",
   "module": "dist/namespace.mjs",
@@ -25,6 +25,10 @@
     "dist/",
     "types/",
     "src/",
+    "METALAND/",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "GEMINI.md",
     "LICENSE",
     "README.md"
   ],
