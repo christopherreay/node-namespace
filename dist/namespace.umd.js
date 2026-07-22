@@ -463,6 +463,161 @@
         }
         return result;
     }
+    // ── internal helper for complement tree building ─────────────────────────────
+    function _setDeep(target, dottedPath, value) {
+        const segments = dottedPath.split(".");
+        let current = target;
+        for (let i = 0; i < segments.length - 1; i++) {
+            if (!Object.prototype.hasOwnProperty.call(current, segments[i]) || !isObject(current[segments[i]])) {
+                current[segments[i]] = {};
+            }
+            current = current[segments[i]];
+        }
+        current[segments[segments.length - 1]] = value;
+    }
+    // ── diff/comparison verbs ────────────────────────────────────────────────────
+    function _equalsRecurse(obj1, obj2, seen) {
+        if (obj1 === obj2)
+            return true;
+        if (!isObject(obj1) || !isObject(obj2))
+            return false;
+        let seenSet = seen.get(obj1);
+        if (seenSet) {
+            if (seenSet.has(obj2))
+                return true;
+        }
+        else {
+            seenSet = new WeakSet();
+            seen.set(obj1, seenSet);
+        }
+        seenSet.add(obj2);
+        const keys1 = Object.keys(obj1);
+        const keys2 = Object.keys(obj2);
+        if (keys1.length !== keys2.length)
+            return false;
+        for (const key of keys1) {
+            if (!(key in obj2))
+                return false;
+            if (!_equalsRecurse(obj1[key], obj2[key], seen))
+                return false;
+        }
+        return true;
+    }
+    function equals(object1, object2) {
+        if (object1 === object2)
+            return true;
+        if (!isObject(object1) || !isObject(object2))
+            return false;
+        return _equalsRecurse(object1, object2, new WeakMap());
+    }
+    function _vennRecurse(obj1, obj2, fullAddress, result, compareValues, seen) {
+        const prefix = fullAddress !== null ? fullAddress + "." : "";
+        if (isObject(obj1) && isObject(obj2)) {
+            let seenSet = seen.get(obj1);
+            if (seenSet && seenSet.has(obj2))
+                return;
+            if (!seenSet) {
+                seenSet = new WeakSet();
+                seen.set(obj1, seenSet);
+            }
+            seenSet.add(obj2);
+        }
+        let obj2KeyList = null;
+        if (isObject(obj2))
+            obj2KeyList = Object.keys(obj2);
+        for (const key of Object.keys(obj1)) {
+            const path = prefix + key;
+            const value = obj1[key];
+            if (!isObject(obj2) || !(key in obj2) || typeof value === "function") {
+                result.inOneNotTwo.push(path);
+                result.changed = true;
+                _setDeep(result.complementOfTwo, path, value);
+                continue;
+            }
+            if (obj2KeyList) {
+                const idx = obj2KeyList.indexOf(key);
+                if (idx !== -1)
+                    obj2KeyList.splice(idx, 1);
+            }
+            if (isObject(value)) {
+                _vennRecurse(value, obj2[key], path, result, compareValues, seen);
+            }
+            else if (compareValues && value !== obj2[key]) {
+                if (!result.changedValues_list)
+                    result.changedValues_list = [];
+                result.changedValues_list.push({ path, one: value, two: obj2[key] });
+                result.changed = true;
+            }
+        }
+        if (obj2KeyList && obj2KeyList.length > 0) {
+            for (const key of obj2KeyList) {
+                const path = prefix + key;
+                result.inTwoNotOne.push(path);
+                result.changed = true;
+                _setDeep(result.complementOfOne, path, obj2[key]);
+            }
+        }
+    }
+    function venn(object1, object2, options) {
+        if (!isObject(object1)) {
+            throw new Error("namespace.venn: object1 must be an object");
+        }
+        const result = {
+            inOneNotTwo: [],
+            inTwoNotOne: [],
+            complementOfTwo: {},
+            complementOfOne: {},
+        };
+        if (options && options.compareValues) {
+            result.changedValues_list = [];
+        }
+        _vennRecurse(object1, object2, null, result, !!(options && options.compareValues), new WeakMap());
+        if (result.changed !== true)
+            return undefined;
+        return result;
+    }
+    function graftComplement(target, vennData, options) {
+        if (!isObject(target))
+            throw new Error("namespace.graftComplement: target must be an object");
+        if (!isObject(vennData))
+            throw new Error("namespace.graftComplement: vennData must be an object");
+        for (const pathEntry of vennData.inOneNotTwo) {
+            const value = getMustExist(vennData.complementOfTwo, pathEntry);
+            setOverwrite(target, pathEntry, value, options);
+        }
+        return target;
+    }
+    function _flattenRecurse(obj, prefix, result, seen) {
+        if (seen.has(obj))
+            return;
+        seen.add(obj);
+        for (const key of Object.keys(obj)) {
+            const path = prefix ? prefix + "." + key : key;
+            const value = obj[key];
+            if (isObject(value) && !Array.isArray(value) && Object.keys(value).length > 0) {
+                _flattenRecurse(value, path, result, seen);
+            }
+            else {
+                result[path] = value;
+            }
+        }
+    }
+    function flatten(object) {
+        if (!isObject(object))
+            throw new Error("namespace.flatten: argument must be an object");
+        const result = {};
+        _flattenRecurse(object, "", result, new WeakSet());
+        return result;
+    }
+    function expand(flat) {
+        if (!isObject(flat))
+            throw new Error("namespace.expand: argument must be an object");
+        const result = {};
+        for (const [pathEntry, value] of Object.entries(flat)) {
+            _setDeep(result, pathEntry, value);
+        }
+        return result;
+    }
     // ── bare namespace() ─────────────────────────────────────────────────────────
     //
     // namespace(object, path)
@@ -523,17 +678,26 @@
         traverse,
         path,
         batch,
+        equals,
+        venn,
+        graftComplement,
+        flatten,
+        expand,
     });
 
     exports.NotFound = NotFound;
     exports.batch = batch;
     exports.configure = configure;
     exports.default = namespace;
+    exports.equals = equals;
     exports.exists = exists;
+    exports.expand = expand;
+    exports.flatten = flatten;
     exports.getIfExists = getIfExists;
     exports.getMustEmpty = getMustEmpty;
     exports.getMustExist = getMustExist;
     exports.getOrDefault = getOrDefault;
+    exports.graftComplement = graftComplement;
     exports.isNotFound = isNotFound;
     exports.path = path;
     exports.rm = rm;
@@ -543,6 +707,7 @@
     exports.setOrDefault = setOrDefault;
     exports.setOverwrite = setOverwrite;
     exports.traverse = traverse;
+    exports.venn = venn;
 
     Object.defineProperty(exports, '__esModule', { value: true });
 

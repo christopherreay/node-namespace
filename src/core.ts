@@ -521,6 +521,169 @@ export function rmMustExist(object: any, path: string): any {
   return result;
 }
 
+// ── internal helper for complement tree building ─────────────────────────────
+
+function _setDeep(target: any, dottedPath: string, value: any): void {
+  const segments = dottedPath.split(".");
+  let current = target;
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (!Object.prototype.hasOwnProperty.call(current, segments[i]) || !isObject(current[segments[i]])) {
+      current[segments[i]] = {};
+    }
+    current = current[segments[i]];
+  }
+  current[segments[segments.length - 1]] = value;
+}
+
+// ── diff/comparison verbs ────────────────────────────────────────────────────
+
+function _equalsRecurse(obj1: any, obj2: any, seen: WeakMap<object, WeakSet<object>>): boolean {
+  if (obj1 === obj2) return true;
+  if (!isObject(obj1) || !isObject(obj2)) return false;
+
+  let seenSet = seen.get(obj1 as object);
+  if (seenSet) {
+    if (seenSet.has(obj2 as object)) return true;
+  } else {
+    seenSet = new WeakSet();
+    seen.set(obj1 as object, seenSet);
+  }
+  seenSet.add(obj2 as object);
+
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  if (keys1.length !== keys2.length) return false;
+
+  for (const key of keys1) {
+    if (!(key in obj2)) return false;
+    if (!_equalsRecurse(obj1[key], obj2[key], seen)) return false;
+  }
+  return true;
+}
+
+export function equals(object1: any, object2: any): boolean {
+  if (object1 === object2) return true;
+  if (!isObject(object1) || !isObject(object2)) return false;
+  return _equalsRecurse(object1, object2, new WeakMap());
+}
+
+function _vennRecurse(
+  obj1: any, obj2: any,
+  fullAddress: string | null,
+  result: any,
+  compareValues: boolean,
+  seen: WeakMap<object, WeakSet<object>>
+): void {
+  const prefix = fullAddress !== null ? fullAddress + "." : "";
+
+  if (isObject(obj1) && isObject(obj2)) {
+    let seenSet = seen.get(obj1 as object);
+    if (seenSet && seenSet.has(obj2 as object)) return;
+    if (!seenSet) { seenSet = new WeakSet(); seen.set(obj1 as object, seenSet); }
+    seenSet.add(obj2 as object);
+  }
+
+  let obj2KeyList: string[] | null = null;
+  if (isObject(obj2)) obj2KeyList = Object.keys(obj2);
+
+  for (const key of Object.keys(obj1)) {
+    const path = prefix + key;
+    const value = obj1[key];
+
+    if (!isObject(obj2) || !(key in obj2) || typeof value === "function") {
+      result.inOneNotTwo.push(path);
+      result.changed = true;
+      _setDeep(result.complementOfTwo, path, value);
+      continue;
+    }
+
+    if (obj2KeyList) {
+      const idx = obj2KeyList.indexOf(key);
+      if (idx !== -1) obj2KeyList.splice(idx, 1);
+    }
+
+    if (isObject(value)) {
+      _vennRecurse(value, obj2[key], path, result, compareValues, seen);
+    } else if (compareValues && value !== obj2[key]) {
+      if (!result.changedValues_list) result.changedValues_list = [];
+      result.changedValues_list.push({ path, one: value, two: obj2[key] });
+      result.changed = true;
+    }
+  }
+
+  if (obj2KeyList && obj2KeyList.length > 0) {
+    for (const key of obj2KeyList) {
+      const path = prefix + key;
+      result.inTwoNotOne.push(path);
+      result.changed = true;
+      _setDeep(result.complementOfOne, path, obj2[key]);
+    }
+  }
+}
+
+export function venn(object1: any, object2: any, options?: { compareValues?: boolean }): any {
+  if (!isObject(object1)) {
+    throw new Error("namespace.venn: object1 must be an object");
+  }
+
+  const result: any = {
+    inOneNotTwo: [],
+    inTwoNotOne: [],
+    complementOfTwo: {},
+    complementOfOne: {},
+  };
+
+  if (options && options.compareValues) {
+    result.changedValues_list = [];
+  }
+
+  _vennRecurse(object1, object2, null, result, !!(options && options.compareValues), new WeakMap());
+
+  if (result.changed !== true) return undefined;
+  return result;
+}
+
+export function graftComplement(target: any, vennData: any, options?: { overwriteStructure?: boolean }): any {
+  if (!isObject(target)) throw new Error("namespace.graftComplement: target must be an object");
+  if (!isObject(vennData)) throw new Error("namespace.graftComplement: vennData must be an object");
+
+  for (const pathEntry of vennData.inOneNotTwo) {
+    const value = getMustExist(vennData.complementOfTwo, pathEntry);
+    setOverwrite(target, pathEntry, value, options);
+  }
+  return target;
+}
+
+function _flattenRecurse(obj: any, prefix: string, result: Record<string, any>, seen: WeakSet<object>): void {
+  if (seen.has(obj as object)) return;
+  seen.add(obj as object);
+  for (const key of Object.keys(obj)) {
+    const path = prefix ? prefix + "." + key : key;
+    const value = obj[key];
+    if (isObject(value) && !Array.isArray(value) && Object.keys(value).length > 0) {
+      _flattenRecurse(value, path, result, seen);
+    } else {
+      result[path] = value;
+    }
+  }
+}
+
+export function flatten(object: any): Record<string, any> {
+  if (!isObject(object)) throw new Error("namespace.flatten: argument must be an object");
+  const result: Record<string, any> = {};
+  _flattenRecurse(object, "", result, new WeakSet());
+  return result;
+}
+
+export function expand(flat: Record<string, any>): any {
+  if (!isObject(flat)) throw new Error("namespace.expand: argument must be an object");
+  const result: any = {};
+  for (const [pathEntry, value] of Object.entries(flat)) {
+    _setDeep(result, pathEntry, value);
+  }
+  return result;
+}
+
 // ── bare namespace() ─────────────────────────────────────────────────────────
 //
 // namespace(object, path)
@@ -587,6 +750,11 @@ type Namespace = typeof namespaceEnsure & {
   traverse: typeof traverse;
   path: typeof path;
   batch: typeof batch;
+  equals: typeof equals;
+  venn: typeof venn;
+  graftComplement: typeof graftComplement;
+  flatten: typeof flatten;
+  expand: typeof expand;
 };
 
 const namespace: Namespace = Object.assign(namespaceEnsure, {
@@ -607,6 +775,11 @@ const namespace: Namespace = Object.assign(namespaceEnsure, {
   traverse,
   path,
   batch,
+  equals,
+  venn,
+  graftComplement,
+  flatten,
+  expand,
 });
 
 export default namespace;

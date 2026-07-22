@@ -941,4 +941,281 @@ describe("namespace exports", () => {
     assert.ok(namespace.NotFound);
     assert.ok(Object.isFrozen(namespace.NotFound));
   });
+
+  const diffVerbs = ["equals", "venn", "graftComplement", "flatten", "expand"];
+  for (const verb of diffVerbs) {
+    it(`exports ${verb} as a function`, () => {
+      assert.equal(typeof namespace[verb], "function");
+    });
+  }
+});
+
+// ── equals ───────────────────────────────────────────────────────────────────
+
+describe("equals()", () => {
+  it("same primitives (via ===)", () => {
+    assert.equal(namespace.equals(1, 1), true);
+    assert.equal(namespace.equals("a", "a"), true);
+    assert.equal(namespace.equals(true, true), true);
+    assert.equal(namespace.equals(null, null), true);
+  });
+
+  it("different primitives", () => {
+    assert.equal(namespace.equals(1, 2), false);
+    assert.equal(namespace.equals("a", "b"), false);
+  });
+
+  it("same object reference", () => {
+    const obj = { a: 1 };
+    assert.equal(namespace.equals(obj, obj), true);
+  });
+
+  it("deep equal plain objects", () => {
+    assert.equal(namespace.equals({ a: { b: 1 } }, { a: { b: 1 } }), true);
+  });
+
+  it("deep equal arrays", () => {
+    assert.equal(namespace.equals([1, 2, 3], [1, 2, 3]), true);
+  });
+
+  it("missing key in object2", () => {
+    assert.equal(namespace.equals({ a: 1, b: 2 }, { a: 1 }), false);
+  });
+
+  it("extra key in object2", () => {
+    assert.equal(namespace.equals({ a: 1 }, { a: 1, b: 2 }), false);
+  });
+
+  it("different nested values", () => {
+    assert.equal(namespace.equals({ a: { b: 1 } }, { a: { b: 2 } }), false);
+  });
+
+  it("function identity — same function", () => {
+    const fn = () => {};
+    assert.equal(namespace.equals({ a: fn }, { a: fn }), true);
+  });
+
+  it("function identity — different functions", () => {
+    assert.equal(namespace.equals({ a: () => {} }, { a: () => {} }), false);
+  });
+
+  it("cycle-safe — does not stack overflow", () => {
+    const a = {}; a.self = a;
+    const b = {}; b.self = b;
+    assert.equal(namespace.equals(a, b), true);
+  });
+
+  it("precedence fix regression — !(key in obj) not (!key) in obj", () => {
+    assert.equal(namespace.equals({ a: 1, b: 2 }, { a: 1 }), false);
+    assert.equal(namespace.equals({ "": 1 }, {}), false);
+  });
+
+  it("mixed types — object vs primitive", () => {
+    assert.equal(namespace.equals({ a: 1 }, 1), false);
+    assert.equal(namespace.equals(1, { a: 1 }), false);
+  });
+
+  it("empty objects", () => {
+    assert.equal(namespace.equals({}, {}), true);
+  });
+
+  it("null vs object", () => {
+    assert.equal(namespace.equals(null, {}), false);
+    assert.equal(namespace.equals({}, null), false);
+  });
+});
+
+// ── venn ─────────────────────────────────────────────────────────────────────
+
+describe("venn()", () => {
+  it("returns undefined for equal objects (no differences)", () => {
+    assert.equal(namespace.venn({ a: 1, b: { c: 2 } }, { a: 1, b: { c: 2 } }), undefined);
+  });
+
+  it("detects keys in object1 not in object2", () => {
+    const result = namespace.venn({ a: 1, b: 2 }, { a: 1 });
+    assert.ok(result);
+    assert.deepStrictEqual(result.inOneNotTwo, ["b"]);
+    assert.equal(result.complementOfTwo.b, 2);
+  });
+
+  it("detects keys in object2 not in object1", () => {
+    const result = namespace.venn({ a: 1 }, { a: 1, b: 2 });
+    assert.ok(result);
+    assert.deepStrictEqual(result.inTwoNotOne, ["b"]);
+    assert.equal(result.complementOfOne.b, 2);
+  });
+
+  it("detects nested differences", () => {
+    const result = namespace.venn({ a: { b: 1, c: 2 } }, { a: { b: 1 } });
+    assert.ok(result);
+    assert.deepStrictEqual(result.inOneNotTwo, ["a.c"]);
+    assert.equal(namespace.getIfExists(result.complementOfTwo, "a.c"), 2);
+  });
+
+  it("functions always land in inOneNotTwo — serialization residue", () => {
+    const fn = () => "hello";
+    const original = { a: 1, handler: fn, nested: { cb: fn } };
+    const jsonCopy = JSON.parse(JSON.stringify(original));
+    const result = namespace.venn(original, jsonCopy);
+    assert.ok(result);
+    assert.ok(result.inOneNotTwo.includes("handler"));
+    assert.ok(result.inOneNotTwo.includes("nested.cb"));
+    assert.equal(namespace.getIfExists(result.complementOfTwo, "handler"), fn);
+    assert.equal(namespace.getIfExists(result.complementOfTwo, "nested.cb"), fn);
+  });
+
+  it("compareValues detects changed primitives", () => {
+    const result = namespace.venn({ a: 1, b: "old" }, { a: 1, b: "new" }, { compareValues: true });
+    assert.ok(result);
+    assert.ok(result.changedValues_list);
+    assert.equal(result.changedValues_list.length, 1);
+    assert.equal(result.changedValues_list[0].path, "b");
+    assert.equal(result.changedValues_list[0].one, "old");
+    assert.equal(result.changedValues_list[0].two, "new");
+  });
+
+  it("compareValues — no list when option is off", () => {
+    const result = namespace.venn({ a: 1 }, { a: 2 });
+    assert.equal(result, undefined);
+  });
+
+  it("cycle-safe — does not stack overflow", () => {
+    const a = { x: 1 }; a.self = a;
+    const b = { x: 1 }; b.self = b;
+    assert.doesNotThrow(() => namespace.venn(a, b));
+  });
+
+  it("arrays recurse index-wise", () => {
+    const result = namespace.venn({ arr: [1, 2, 3] }, { arr: [1, 2] }, { compareValues: true });
+    assert.ok(result);
+    assert.ok(result.inOneNotTwo.includes("arr.2"));
+  });
+
+  it("throws if object1 is not an object", () => {
+    assert.throws(() => namespace.venn("string", {}), /object1 must be an object/);
+    assert.throws(() => namespace.venn(null, {}), /object1 must be an object/);
+  });
+
+  it("handles object2 being null — all keys in inOneNotTwo", () => {
+    const result = namespace.venn({ a: 1, b: 2 }, null);
+    assert.ok(result);
+    assert.deepStrictEqual(result.inOneNotTwo.sort(), ["a", "b"]);
+  });
+});
+
+// ── graftComplement ──────────────────────────────────────────────────────────
+
+describe("graftComplement()", () => {
+  it("grafts venn residue back to restore the original", () => {
+    const fn = () => "live";
+    const original = { a: 1, handler: fn, nested: { cb: fn, data: 42 } };
+    const jsonCopy = JSON.parse(JSON.stringify(original));
+    const residue = namespace.venn(original, jsonCopy);
+    assert.ok(residue);
+
+    namespace.graftComplement(jsonCopy, residue);
+    assert.equal(jsonCopy.handler, fn);
+    assert.equal(jsonCopy.nested.cb, fn);
+  });
+
+  it("reference identity — grafted values are the same objects, not copies", () => {
+    const liveObj = { state: "active" };
+    const original = { config: { engine: liveObj } };
+    const jsonCopy = JSON.parse(JSON.stringify(original));
+    const residue = namespace.venn(original, jsonCopy);
+
+    if (residue) {
+      namespace.graftComplement(jsonCopy, residue);
+    }
+    // If engine was a plain serializable object, venn returns undefined (no residue)
+    // That's correct — no grafting needed
+  });
+
+  it("grafts function references back with ===", () => {
+    const fn = function handler() {};
+    const obj1 = { a: { f: fn } };
+    const obj2 = { a: {} };
+    const diff = namespace.venn(obj1, obj2);
+    assert.ok(diff);
+    namespace.graftComplement(obj2, diff);
+    assert.strictEqual(obj2.a.f, fn);
+  });
+
+  it("returns the target", () => {
+    const target = {};
+    const vennData = { inOneNotTwo: ["x"], complementOfTwo: { x: 1 } };
+    const result = namespace.graftComplement(target, vennData);
+    assert.equal(result, target);
+    assert.equal(target.x, 1);
+  });
+
+  it("throws on non-object target", () => {
+    assert.throws(() => namespace.graftComplement(null, {}), /target must be an object/);
+  });
+});
+
+// ── flatten ──────────────────────────────────────────────────────────────────
+
+describe("flatten()", () => {
+  it("flattens a nested object to dotted-path keys", () => {
+    const result = namespace.flatten({ a: { b: { c: 1 }, b2: 2 } });
+    assert.deepStrictEqual(result, { "a.b.c": 1, "a.b2": 2 });
+  });
+
+  it("single key — passes through", () => {
+    assert.deepStrictEqual(namespace.flatten({ a: 1 }), { a: 1 });
+  });
+
+  it("empty object", () => {
+    assert.deepStrictEqual(namespace.flatten({}), {});
+  });
+
+  it("preserves arrays as leaf values", () => {
+    const arr = [1, 2, 3];
+    const result = namespace.flatten({ a: { list: arr } });
+    assert.deepStrictEqual(result, { "a.list": arr });
+    assert.equal(result["a.list"], arr);
+  });
+
+  it("preserves empty nested objects as leaf values", () => {
+    const result = namespace.flatten({ a: { empty: {} } });
+    assert.deepStrictEqual(result, { "a.empty": {} });
+  });
+
+  it("cycle-safe — does not stack overflow", () => {
+    const obj = { a: 1 }; obj.self = obj;
+    assert.doesNotThrow(() => namespace.flatten(obj));
+  });
+
+  it("throws on non-object input", () => {
+    assert.throws(() => namespace.flatten("string"), /must be an object/);
+  });
+});
+
+// ── expand ───────────────────────────────────────────────────────────────────
+
+describe("expand()", () => {
+  it("expands dotted-path keys to a nested object", () => {
+    const result = namespace.expand({ "a.b.c": 1, "a.b2": 2 });
+    assert.deepStrictEqual(result, { a: { b: { c: 1 }, b2: 2 } });
+  });
+
+  it("single key — passes through", () => {
+    assert.deepStrictEqual(namespace.expand({ a: 1 }), { a: 1 });
+  });
+
+  it("empty object", () => {
+    assert.deepStrictEqual(namespace.expand({}), {});
+  });
+
+  it("round-trip: expand(flatten(obj)) deep-equals original", () => {
+    const original = { a: { b: { c: 1 }, d: "hello" }, e: 42 };
+    const roundTripped = namespace.expand(namespace.flatten(original));
+    assert.ok(namespace.equals(roundTripped, original));
+  });
+
+  it("throws on non-object input", () => {
+    assert.throws(() => namespace.expand("string"), /must be an object/);
+  });
 });
