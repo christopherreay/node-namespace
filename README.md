@@ -274,6 +274,39 @@ const vals = namespace.batch.allMustExist(config, [
 const token = namespace.batch.extractMustExist(ctx, "pending.token");
 ```
 
+## Immutability: `namespace.freeze`
+
+`Object.freeze` is one level deep. These walk the whole reachable tree.
+
+```javascript
+// Freeze in place — same reference back, everything below it frozen
+const config = namespace.freeze.deep(loadConfig());
+config.server.port = 9090;              // TypeError in strict mode
+
+// Freeze one point in a tree that stays otherwise open
+namespace.freeze.at(state, "constants");        // subtree
+namespace.freeze.at(state, "config.port");      // primitive leaf → property locked
+
+// Frozen copy — the original stays mutable
+const snapshot = namespace.freeze.clone(state);
+state.a.b = 2;                          // snapshot.a.b unchanged
+
+// Mutable copy back out
+const draft = namespace.freeze.thaw(snapshot);
+
+namespace.freeze.isDeep(snapshot);      // true
+```
+
+Traversal rules, shared by `deep` / `at` / `isDeep`:
+
+- **Cycle-safe** — a node already visited is not revisited
+- **Getters are never invoked** — accessor properties are skipped, only data properties are descended
+- **Symbol and non-enumerable keys included** — `Reflect.ownKeys`
+- **Functions left alone** unless `{ freezeFunctions: true }`
+- **Map/Set contents are not frozen** — freezing the container does not stop `.set()`/`.add()`; JS offers no way to make those immutable in place
+
+`freeze.clone` / `freeze.thaw` copy plain objects and arrays; `Date`, `Map`, `Set`, and class instances are carried across by reference.
+
 ## Configuration
 
 ```javascript

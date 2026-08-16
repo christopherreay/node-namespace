@@ -684,6 +684,157 @@ export function expand(flat: Record<string, any>): any {
   return result;
 }
 
+// ── namespace.freeze ─────────────────────────────────────────────────────────
+//
+// Immutability verbs. Object.freeze is shallow — one level only. These walk the
+// whole reachable tree.
+//
+// Traversal rules (shared by deep / at / isDeep):
+//   • cycle-safe — a node already visited is not revisited
+//   • accessor properties are NOT invoked; only data properties are descended
+//   • symbol keys and non-enumerable keys are included (Reflect.ownKeys)
+//   • functions are left alone unless { freezeFunctions: true }
+//   • Map/Set contents are NOT frozen — freezing the container does not stop
+//     .set()/.add(); nothing in JS can make those immutable in place
+
+interface FreezeOptions {
+  /** Also freeze function values encountered in the tree (default: false). */
+  freezeFunctions?: boolean;
+}
+
+function _freezeRecurse(value: any, options: FreezeOptions, seen: WeakSet<object>): any {
+  if (value === null) return value;
+  const valueType = typeof value;
+  if (valueType !== "object" && valueType !== "function") return value;
+  if (valueType === "function" && !options.freezeFunctions) return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
+
+  Object.freeze(value);
+
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) continue;   // accessor — do not invoke the getter
+    _freezeRecurse(descriptor.value, options, seen);
+  }
+  return value;
+}
+
+function _isDeepFrozenRecurse(value: any, options: FreezeOptions, seen: WeakSet<object>): boolean {
+  if (value === null) return true;
+  const valueType = typeof value;
+  if (valueType !== "object" && valueType !== "function") return true;
+  if (valueType === "function" && !options.freezeFunctions) return true;
+  if (seen.has(value)) return true;
+  seen.add(value);
+
+  if (!Object.isFrozen(value)) return false;
+
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) continue;
+    if (!_isDeepFrozenRecurse(descriptor.value, options, seen)) return false;
+  }
+  return true;
+}
+
+// Structural copy. Plain objects and arrays are copied; anything else
+// (Date, Map, class instance, function) is carried across by reference.
+function _cloneRecurse(value: any, seen: WeakMap<object, any>): any {
+  if (!isObject(value)) return value;
+  if (seen.has(value as object)) return seen.get(value as object);
+
+  if (Array.isArray(value)) {
+    const copy_list: any[] = [];
+    seen.set(value as object, copy_list);
+    for (let index = 0; index < value.length; index++) {
+      copy_list[index] = _cloneRecurse(value[index], seen);
+    }
+    return copy_list;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;   // not a plain object
+
+  const copy_node: Record<string, any> = {};
+  seen.set(value as object, copy_node);
+  for (const key of Object.keys(value)) {
+    copy_node[key] = _cloneRecurse((value as any)[key], seen);
+  }
+  return copy_node;
+}
+
+export const freeze: {
+  deep(object: any, options?: FreezeOptions): any;
+  at(object: any, path: string, options?: FreezeOptions): any;
+  isDeep(value: any, options?: FreezeOptions): boolean;
+  clone(object: any, options?: FreezeOptions): any;
+  thaw(object: any): any;
+} = {
+
+  // deep(obj) — freeze obj and everything reachable from it, in place.
+  // Returns the same reference, now frozen.
+  deep(object: any, options?: FreezeOptions): any {
+    if (!isObject(object) && typeof object !== "function") {
+      throw new Error("namespace.freeze.deep: argument must be an object");
+    }
+    return _freezeRecurse(object, options || {}, new WeakSet());
+  },
+
+  // at(obj, "a.b") — deep-freeze the subtree at a dotted path. Throws if absent.
+  // If the value at the path is a primitive there is nothing to freeze, so the
+  // property itself is locked on its parent (writable: false, configurable: false).
+  // Returns the frozen value.
+  at(object: any, path: string, options?: FreezeOptions): any {
+    const foundValue = getMustExist(object, path);
+
+    if (isObject(foundValue) || typeof foundValue === "function") {
+      return _freezeRecurse(foundValue, options || {}, new WeakSet());
+    }
+
+    const segments_list = path.split(".");
+    const leafKey       = segments_list[segments_list.length - 1];
+    const parent_node   = segments_list.length === 1
+      ? object
+      : getMustExist(object, segments_list.slice(0, -1).join("."));
+
+    const descriptor = Object.getOwnPropertyDescriptor(parent_node, leafKey);
+    Object.defineProperty(parent_node, leafKey, {
+      value:        foundValue,
+      writable:     false,
+      configurable: false,
+      enumerable:   descriptor ? descriptor.enumerable : true,
+    });
+    return foundValue;
+  },
+
+  // isDeep(value) — true when value and everything reachable from it is frozen.
+  // Uses the same traversal rules as deep(), so isDeep(deep(x)) is always true.
+  isDeep(value: any, options?: FreezeOptions): boolean {
+    return _isDeepFrozenRecurse(value, options || {}, new WeakSet());
+  },
+
+  // clone(obj) — deep-frozen copy. The original stays mutable.
+  // Plain objects and arrays are copied; Date/Map/Set/class instances and
+  // functions are carried by reference (and frozen in place by the freeze pass).
+  clone(object: any, options?: FreezeOptions): any {
+    if (!isObject(object)) {
+      throw new Error("namespace.freeze.clone: argument must be an object");
+    }
+    return _freezeRecurse(_cloneRecurse(object, new WeakMap()), options || {}, new WeakSet());
+  },
+
+  // thaw(obj) — mutable structural copy of a frozen tree.
+  // The inverse door: freeze.clone in, freeze.thaw out.
+  thaw(object: any): any {
+    if (!isObject(object)) {
+      throw new Error("namespace.freeze.thaw: argument must be an object");
+    }
+    return _cloneRecurse(object, new WeakMap());
+  },
+
+};
+
 // ── bare namespace() ─────────────────────────────────────────────────────────
 //
 // namespace(object, path)
@@ -750,6 +901,7 @@ type Namespace = typeof namespaceEnsure & {
   traverse: typeof traverse;
   path: typeof path;
   batch: typeof batch;
+  freeze: typeof freeze;
   equals: typeof equals;
   venn: typeof venn;
   graftComplement: typeof graftComplement;
@@ -775,6 +927,7 @@ const namespace: Namespace = Object.assign(namespaceEnsure, {
   traverse,
   path,
   batch,
+  freeze,
   equals,
   venn,
   graftComplement,

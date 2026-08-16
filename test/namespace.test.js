@@ -1219,3 +1219,173 @@ describe("expand()", () => {
     assert.throws(() => namespace.expand("string"), /must be an object/);
   });
 });
+
+// ── namespace.freeze ─────────────────────────────────────────────────────────
+
+describe("namespace.freeze.deep()", () => {
+  it("freezes nested objects all the way down", () => {
+    const obj = namespace.freeze.deep({ a: { b: { c: 1 } } });
+    assert.ok(Object.isFrozen(obj));
+    assert.ok(Object.isFrozen(obj.a));
+    assert.ok(Object.isFrozen(obj.a.b));
+  });
+
+  it("returns the same reference", () => {
+    const obj = { a: 1 };
+    assert.equal(namespace.freeze.deep(obj), obj);
+  });
+
+  it("rejects nested writes", () => {
+    const obj = namespace.freeze.deep({ a: { b: 1 } });
+    assert.throws(() => { obj.a.b = 2; }, TypeError);
+    assert.equal(obj.a.b, 1);
+  });
+
+  it("freezes arrays and their elements", () => {
+    const obj = namespace.freeze.deep({ list: [{ x: 1 }, { x: 2 }] });
+    assert.ok(Object.isFrozen(obj.list));
+    assert.ok(Object.isFrozen(obj.list[0]));
+    assert.throws(() => { obj.list.push(3); }, TypeError);
+  });
+
+  it("is cycle-safe", () => {
+    const obj = { a: {} };
+    obj.a.self = obj;
+    namespace.freeze.deep(obj);
+    assert.ok(Object.isFrozen(obj.a));
+  });
+
+  it("does not invoke getters", () => {
+    let getterCalls = 0;
+    const obj = { plain: 1 };
+    Object.defineProperty(obj, "lazy", { get() { getterCalls++; return {}; }, enumerable: true, configurable: true });
+    namespace.freeze.deep(obj);
+    assert.equal(getterCalls, 0);
+  });
+
+  it("leaves functions alone by default, freezes them with freezeFunctions", () => {
+    const fn1 = () => {};
+    namespace.freeze.deep({ fn: fn1 });
+    assert.equal(Object.isFrozen(fn1), false);
+
+    const fn2 = () => {};
+    namespace.freeze.deep({ fn: fn2 }, { freezeFunctions: true });
+    assert.ok(Object.isFrozen(fn2));
+  });
+
+  it("freezes symbol-keyed values", () => {
+    const key = Symbol("k");
+    const obj = namespace.freeze.deep({ [key]: { deep: 1 } });
+    assert.ok(Object.isFrozen(obj[key]));
+  });
+
+  it("throws on primitive input", () => {
+    assert.throws(() => namespace.freeze.deep("string"), /must be an object/);
+  });
+});
+
+describe("namespace.freeze.isDeep()", () => {
+  it("true after deep freeze", () => {
+    assert.ok(namespace.freeze.isDeep(namespace.freeze.deep({ a: { b: { c: 1 } } })));
+  });
+
+  it("false when only the top level is frozen", () => {
+    const obj = Object.freeze({ a: { b: 1 } });
+    assert.equal(namespace.freeze.isDeep(obj), false);
+  });
+
+  it("true for primitives", () => {
+    assert.ok(namespace.freeze.isDeep(42));
+    assert.ok(namespace.freeze.isDeep(null));
+  });
+
+  it("cycle-safe", () => {
+    const obj = { a: {} };
+    obj.a.self = obj;
+    namespace.freeze.deep(obj);
+    assert.ok(namespace.freeze.isDeep(obj));
+  });
+});
+
+describe("namespace.freeze.at()", () => {
+  it("freezes only the named subtree", () => {
+    const obj = { locked: { a: { b: 1 } }, open: { c: 1 } };
+    namespace.freeze.at(obj, "locked");
+    assert.ok(namespace.freeze.isDeep(obj.locked));
+    assert.equal(Object.isFrozen(obj.open), false);
+    assert.equal(Object.isFrozen(obj), false);
+  });
+
+  it("locks the property for a primitive leaf", () => {
+    const obj = { config: { port: 8080 } };
+    namespace.freeze.at(obj, "config.port");
+    assert.throws(() => { obj.config.port = 9090; }, TypeError);
+    assert.equal(obj.config.port, 8080);
+    obj.config.host = "localhost";           // parent still open
+    assert.equal(obj.config.host, "localhost");
+  });
+
+  it("locks a single-segment primitive path", () => {
+    const obj = { version: "2.4.0" };
+    namespace.freeze.at(obj, "version");
+    assert.throws(() => { obj.version = "9"; }, TypeError);
+  });
+
+  it("throws when the path is absent", () => {
+    assert.throws(() => namespace.freeze.at({}, "a.b"), /not found/);
+  });
+});
+
+describe("namespace.freeze.clone()", () => {
+  it("returns a deep-frozen copy and leaves the original mutable", () => {
+    const original = { a: { b: 1 } };
+    const frozen   = namespace.freeze.clone(original);
+
+    assert.ok(namespace.freeze.isDeep(frozen));
+    assert.ok(namespace.equals(frozen, original));
+    assert.notEqual(frozen.a, original.a);
+
+    original.a.b = 2;
+    assert.equal(frozen.a.b, 1);
+  });
+
+  it("copies arrays", () => {
+    const frozen = namespace.freeze.clone({ list: [1, [2, 3]] });
+    assert.ok(Object.isFrozen(frozen.list[1]));
+    assert.deepStrictEqual(frozen.list, [1, [2, 3]]);
+  });
+
+  it("is cycle-safe", () => {
+    const obj = { name: "root" };
+    obj.self = obj;
+    const frozen = namespace.freeze.clone(obj);
+    assert.equal(frozen.self, frozen);
+    assert.ok(Object.isFrozen(frozen));
+  });
+
+  it("throws on primitive input", () => {
+    assert.throws(() => namespace.freeze.clone(1), /must be an object/);
+  });
+});
+
+describe("namespace.freeze.thaw()", () => {
+  it("returns a mutable copy of a frozen tree", () => {
+    const frozen = namespace.freeze.clone({ a: { b: 1 } });
+    const thawed = namespace.freeze.thaw(frozen);
+
+    assert.equal(Object.isFrozen(thawed), false);
+    assert.equal(Object.isFrozen(thawed.a), false);
+    thawed.a.b = 2;
+    assert.equal(thawed.a.b, 2);
+    assert.equal(frozen.a.b, 1);
+  });
+
+  it("round-trip: thaw(clone(obj)) deep-equals original", () => {
+    const original = { a: { b: { c: 1 } }, d: [1, 2] };
+    assert.ok(namespace.equals(namespace.freeze.thaw(namespace.freeze.clone(original)), original));
+  });
+
+  it("throws on primitive input", () => {
+    assert.throws(() => namespace.freeze.thaw("x"), /must be an object/);
+  });
+});

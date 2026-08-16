@@ -85,6 +85,25 @@ declare namespace namespace {
   export function expand(flatObject: Record<string, any>): any;
 
   export function traverse(ctx: TraversalContext): any;
+
+  /** Deep-immutability verbs — Object.freeze applied across the whole tree. */
+  export const freeze: {
+    /** Freeze object and everything reachable from it, in place. Returns the same reference. */
+    deep(object: any, options?: FreezeOptions): any;
+    /** Deep-freeze the subtree at a dotted path; locks the property itself for primitive leaves. */
+    at(object: any, path: string, options?: FreezeOptions): any;
+    /** True when value and everything reachable from it is frozen. */
+    isDeep(value: any, options?: FreezeOptions): boolean;
+    /** Deep-frozen copy — the original stays mutable. */
+    clone(object: any, options?: FreezeOptions): any;
+    /** Mutable structural copy of a frozen tree. */
+    thaw(object: any): any;
+  };
+}
+
+export interface FreezeOptions {
+  /** Also freeze function values encountered in the tree (default: false). */
+  freezeFunctions?: boolean;
 }
 
 export default namespace;

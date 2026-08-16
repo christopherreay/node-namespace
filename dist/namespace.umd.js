@@ -618,6 +618,128 @@
         }
         return result;
     }
+    function _freezeRecurse(value, options, seen) {
+        if (value === null)
+            return value;
+        const valueType = typeof value;
+        if (valueType !== "object" && valueType !== "function")
+            return value;
+        if (valueType === "function" && !options.freezeFunctions)
+            return value;
+        if (seen.has(value))
+            return value;
+        seen.add(value);
+        Object.freeze(value);
+        for (const key of Reflect.ownKeys(value)) {
+            const descriptor = Object.getOwnPropertyDescriptor(value, key);
+            if (!descriptor || !("value" in descriptor))
+                continue; // accessor — do not invoke the getter
+            _freezeRecurse(descriptor.value, options, seen);
+        }
+        return value;
+    }
+    function _isDeepFrozenRecurse(value, options, seen) {
+        if (value === null)
+            return true;
+        const valueType = typeof value;
+        if (valueType !== "object" && valueType !== "function")
+            return true;
+        if (valueType === "function" && !options.freezeFunctions)
+            return true;
+        if (seen.has(value))
+            return true;
+        seen.add(value);
+        if (!Object.isFrozen(value))
+            return false;
+        for (const key of Reflect.ownKeys(value)) {
+            const descriptor = Object.getOwnPropertyDescriptor(value, key);
+            if (!descriptor || !("value" in descriptor))
+                continue;
+            if (!_isDeepFrozenRecurse(descriptor.value, options, seen))
+                return false;
+        }
+        return true;
+    }
+    // Structural copy. Plain objects and arrays are copied; anything else
+    // (Date, Map, class instance, function) is carried across by reference.
+    function _cloneRecurse(value, seen) {
+        if (!isObject(value))
+            return value;
+        if (seen.has(value))
+            return seen.get(value);
+        if (Array.isArray(value)) {
+            const copy_list = [];
+            seen.set(value, copy_list);
+            for (let index = 0; index < value.length; index++) {
+                copy_list[index] = _cloneRecurse(value[index], seen);
+            }
+            return copy_list;
+        }
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Object.prototype && prototype !== null)
+            return value; // not a plain object
+        const copy_node = {};
+        seen.set(value, copy_node);
+        for (const key of Object.keys(value)) {
+            copy_node[key] = _cloneRecurse(value[key], seen);
+        }
+        return copy_node;
+    }
+    const freeze = {
+        // deep(obj) — freeze obj and everything reachable from it, in place.
+        // Returns the same reference, now frozen.
+        deep(object, options) {
+            if (!isObject(object) && typeof object !== "function") {
+                throw new Error("namespace.freeze.deep: argument must be an object");
+            }
+            return _freezeRecurse(object, options || {}, new WeakSet());
+        },
+        // at(obj, "a.b") — deep-freeze the subtree at a dotted path. Throws if absent.
+        // If the value at the path is a primitive there is nothing to freeze, so the
+        // property itself is locked on its parent (writable: false, configurable: false).
+        // Returns the frozen value.
+        at(object, path, options) {
+            const foundValue = getMustExist(object, path);
+            if (isObject(foundValue) || typeof foundValue === "function") {
+                return _freezeRecurse(foundValue, options || {}, new WeakSet());
+            }
+            const segments_list = path.split(".");
+            const leafKey = segments_list[segments_list.length - 1];
+            const parent_node = segments_list.length === 1
+                ? object
+                : getMustExist(object, segments_list.slice(0, -1).join("."));
+            const descriptor = Object.getOwnPropertyDescriptor(parent_node, leafKey);
+            Object.defineProperty(parent_node, leafKey, {
+                value: foundValue,
+                writable: false,
+                configurable: false,
+                enumerable: descriptor ? descriptor.enumerable : true,
+            });
+            return foundValue;
+        },
+        // isDeep(value) — true when value and everything reachable from it is frozen.
+        // Uses the same traversal rules as deep(), so isDeep(deep(x)) is always true.
+        isDeep(value, options) {
+            return _isDeepFrozenRecurse(value, options || {}, new WeakSet());
+        },
+        // clone(obj) — deep-frozen copy. The original stays mutable.
+        // Plain objects and arrays are copied; Date/Map/Set/class instances and
+        // functions are carried by reference (and frozen in place by the freeze pass).
+        clone(object, options) {
+            if (!isObject(object)) {
+                throw new Error("namespace.freeze.clone: argument must be an object");
+            }
+            return _freezeRecurse(_cloneRecurse(object, new WeakMap()), options || {}, new WeakSet());
+        },
+        // thaw(obj) — mutable structural copy of a frozen tree.
+        // The inverse door: freeze.clone in, freeze.thaw out.
+        thaw(object) {
+            if (!isObject(object)) {
+                throw new Error("namespace.freeze.thaw: argument must be an object");
+            }
+            return _cloneRecurse(object, new WeakMap());
+        },
+    };
     // ── bare namespace() ─────────────────────────────────────────────────────────
     //
     // namespace(object, path)
@@ -678,6 +800,7 @@
         traverse,
         path,
         batch,
+        freeze,
         equals,
         venn,
         graftComplement,
@@ -693,6 +816,7 @@
     exports.exists = exists;
     exports.expand = expand;
     exports.flatten = flatten;
+    exports.freeze = freeze;
     exports.getIfExists = getIfExists;
     exports.getMustEmpty = getMustEmpty;
     exports.getMustExist = getMustExist;

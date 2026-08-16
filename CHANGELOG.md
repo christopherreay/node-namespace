@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-08-16
+
+### Added
+
+- **`namespace.freeze` sub-namespace** — deep immutability verbs
+  - `freeze.deep(object, options?)` — freeze the whole reachable tree in place
+  - `freeze.at(object, path, options?)` — deep-freeze one subtree; locks the property itself for primitive leaves
+  - `freeze.isDeep(value, options?)` — true when nothing reachable is still mutable
+  - `freeze.clone(object, options?)` — deep-frozen copy, original untouched
+  - `freeze.thaw(object)` — mutable structural copy back out
+  - Cycle-safe, getters never invoked, symbol/non-enumerable keys included, functions skipped unless `{ freezeFunctions: true }`
+
 ## [1.0.0] - 2026-02-10
 
 ### Added
