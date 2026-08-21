@@ -784,6 +784,7 @@ const namespace = Object.assign(namespaceEnsure, {
     getMustEmpty,
     getOrDefault,
     setNotExists,
+    setNoOverwrite: setNotExists,
     setMustExist,
     setOrDefault,
     setOverwrite,

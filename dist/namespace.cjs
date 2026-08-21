@@ -885,6 +885,7 @@ function requireCore () {
 	  getOrDefault,
 	  // write
 	  setNotExists,
+	  setNoOverwrite: setNotExists,
 	  setMustExist,
 	  setOrDefault,
 	  setOverwrite,

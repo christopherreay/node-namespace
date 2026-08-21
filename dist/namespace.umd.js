@@ -790,6 +790,7 @@
         getMustEmpty,
         getOrDefault,
         setNotExists,
+        setNoOverwrite: setNotExists,
         setMustExist,
         setOrDefault,
         setOverwrite,

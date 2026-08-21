@@ -891,6 +891,7 @@ type Namespace = typeof namespaceEnsure & {
   getMustEmpty: typeof getMustEmpty;
   getOrDefault: typeof getOrDefault;
   setNotExists: typeof setNotExists;
+  setNoOverwrite: typeof setNotExists;
   setMustExist: typeof setMustExist;
   setOrDefault: typeof setOrDefault;
   setOverwrite: typeof setOverwrite;
@@ -917,6 +918,7 @@ const namespace: Namespace = Object.assign(namespaceEnsure, {
   getMustEmpty,
   getOrDefault,
   setNotExists,
+  setNoOverwrite: setNotExists,
   setMustExist,
   setOrDefault,
   setOverwrite,

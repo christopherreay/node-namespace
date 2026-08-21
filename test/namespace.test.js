@@ -926,7 +926,7 @@ describe("namespace exports", () => {
   const verbs = [
     "configure",
     "getIfExists", "getMustExist", "getMustEmpty", "getOrDefault",
-    "setNotExists", "setMustExist", "setOrDefault", "setOverwrite",
+    "setNotExists", "setNoOverwrite", "setMustExist", "setOrDefault", "setOverwrite",
     "rm", "rmMustExist",
     "exists", "isNotFound",
   ];
